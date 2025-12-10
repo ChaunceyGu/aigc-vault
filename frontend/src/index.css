@@ -1,0 +1,152 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 全局动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 卡片悬停效果 */
+.ant-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ant-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* 图片加载动画 */
+.image-wrapper {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s ease-in-out infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* 平滑滚动 */
+html {
+  scroll-behavior: smooth;
+}
+
+/* 自定义滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 卡片悬停效果增强 */
+.log-card {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #fff;
+}
+
+.log-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15) !important;
+  border-color: #1890ff !important;
+}
+
+/* 图片预览遮罩 */
+.image-preview-mask {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+.log-card:hover .image-preview-mask {
+  opacity: 1 !important;
+}
+
+.log-card:hover .image-hover-overlay {
+  opacity: 1 !important;
+}
+
+.log-card:hover .image-hover-info {
+  opacity: 1 !important;
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .log-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  }
+}
+
+/* 详情页轮播图样式 */
+.custom-dots {
+  bottom: -40px !important;
+}
+
+.custom-dots li button {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background: #d9d9d9 !important;
+}
+
+.custom-dots li.slick-active button {
+  background: #1890ff !important;
+  width: 24px !important;
+  border-radius: 5px !important;
+}
+

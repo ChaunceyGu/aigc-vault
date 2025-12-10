@@ -1,0 +1,88 @@
+# 在 NAS 上直接构建（不需要 Docker Hub）
+# 使用方法：docker-compose -f docker-compose.build.yml up -d --build
+
+version: '3.8'
+
+services:
+  # 数据库服务（可选，如果使用外部数据库可以删除）
+  postgres:
+    image: postgres:15-alpine
+    container_name: aigc_vault_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aigc_vault
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # 后端服务 - 本地构建
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: aigc-backend
+    environment:
+      # 数据库配置 - 如果使用上面的 postgres 服务，使用 postgres:5432
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/aigc_vault
+      # 如果使用外部数据库，修改为：
+      # DATABASE_URL: postgresql://user:password@host:5432/database
+      
+      # RustFS/S3 配置（修改为实际配置）
+      RUSTFS_ENDPOINT_URL: http://192.168.31.3:9900
+      RUSTFS_ACCESS_KEY: your_access_key
+      RUSTFS_SECRET_KEY: your_secret_key
+      RUSTFS_BUCKET: aigcvault
+      RUSTFS_REGION: us-east-1
+      RUSTFS_USE_SSL: "false"
+      
+      # CORS 配置（修改为 NAS 的实际访问地址）
+      CORS_ORIGINS: http://localhost,http://localhost:80
+      
+      # 日志配置
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 前端服务 - 本地构建
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: aigc-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: aigc-network
+
