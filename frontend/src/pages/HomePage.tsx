@@ -1,7 +1,7 @@
 /**
  * 图库列表页面（首页）
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Input,
@@ -167,7 +167,7 @@ const HomePage: React.FC = () => {
                 showSearch
                 size="large"
                 filterOption={(input, option) =>
-                  (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                  String(option?.label || option?.value || '').toLowerCase().includes(input.toLowerCase())
                 }
               >
                 {Object.keys(tagStats.tools).map(tool => (
@@ -187,7 +187,7 @@ const HomePage: React.FC = () => {
                 showSearch
                 size="large"
                 filterOption={(input, option) =>
-                  (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                  String(option?.label || option?.value || '').toLowerCase().includes(input.toLowerCase())
                 }
               >
                 {Object.keys(tagStats.models).map(model => (
@@ -350,7 +350,7 @@ const HomePage: React.FC = () => {
                               maskClassName: 'image-preview-mask',
                             }}
                           fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBuyh8qA4/clzGRhOBBHFmbMxY7twzgxlQqgc6mC56cJ+TsSgUF9QwMDBeP6QxKFRtYmDg+kGAYZ+BhZkOA8C8xMBj+YbA8B8A8D7kMDCwJ8QoG8A4B"
-                          onError={(e) => {
+                          onError={() => {
                             console.error('图片加载失败:', log.cover_url)
                             // 图片加载失败时，显示默认占位图
                           }}

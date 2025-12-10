@@ -1,7 +1,7 @@
 /**
  * 记录详情页面
  */
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Card,
@@ -19,7 +19,7 @@ import {
   Badge,
   Popconfirm,
 } from 'antd'
-import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined, CloseOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { getLogDetail, deleteLog, type LogDetail } from '../services/logs'
 
 const { Title, Text } = Typography
@@ -33,7 +33,6 @@ const LogDetailPage: React.FC = () => {
   const [previewImage, setPreviewImage] = useState('')
   const [previewIndex, setPreviewIndex] = useState(0)
   const [previewImages, setPreviewImages] = useState<string[]>([])
-  const [previewType, setPreviewType] = useState<'input' | 'output'>('output')
 
   useEffect(() => {
     if (id) {
@@ -117,11 +116,10 @@ const LogDetailPage: React.FC = () => {
     }
   }
 
-  const handleImageClick = (url: string, images: string[], index: number, type: 'input' | 'output') => {
+  const handleImageClick = (url: string, images: string[], index: number) => {
     setPreviewImages(images)
     setPreviewIndex(index)
     setPreviewImage(url)
-    setPreviewType(type)
     setPreviewVisible(true)
   }
 
@@ -486,8 +484,7 @@ const LogDetailPage: React.FC = () => {
                             onClick={() => handleImageClick(
                               asset.url,
                               log.input_assets.map(a => a.url),
-                              index,
-                              'input'
+                              index
                             )}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.borderColor = '#1890ff'
@@ -610,8 +607,7 @@ const LogDetailPage: React.FC = () => {
                       onClick={() => handleImageClick(
                         asset.url,
                         log.output_assets.map(a => a.url),
-                        index,
-                        'output'
+                        index
                       )}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.borderColor = '#1890ff'
