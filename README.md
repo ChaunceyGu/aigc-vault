@@ -131,3 +131,4 @@ chmod +x build-and-push.sh
 2. 配置环境变量（数据库、RustFS 等）
 3. 使用 Docker Compose 启动
 
+"# aigc-vault" 
