@@ -1,5 +1,7 @@
 # AI 绘图资产归档系统 (AIGC Asset Vault)
 
+[![GitHub](https://img.shields.io/badge/GitHub-ChaunceyGu%2Faigc--vault-blue)](https://github.com/ChaunceyGu/aigc-vault)
+
 一个基于 PostgreSQL + RustFS 的存算分离架构系统，用于管理和归档 AI 绘图资产、提示词和生成参数。
 
 ## ✨ 功能特性
@@ -59,8 +61,8 @@
 #### 1. 克隆项目
 
 ```bash
-git clone <repository-url>
-cd aigcvault
+git clone https://github.com/ChaunceyGu/aigc-vault.git
+cd aigc-vault
 ```
 
 #### 2. 配置环境变量
@@ -219,6 +221,9 @@ postgresql://用户名:密码@主机:端口/数据库名
 ## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+- 项目地址：[https://github.com/ChaunceyGu/aigc-vault](https://github.com/ChaunceyGu/aigc-vault)
+- 问题反馈：[Issues](https://github.com/ChaunceyGu/aigc-vault/issues)
 
 ## 📄 许可证
 
