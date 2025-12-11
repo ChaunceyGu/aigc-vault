@@ -3,6 +3,7 @@
  */
 import axios from 'axios'
 
+// 使用相对路径，通过 nginx 代理到后端
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,

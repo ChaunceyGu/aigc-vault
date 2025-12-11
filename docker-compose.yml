@@ -25,25 +25,14 @@ services:
   backend:
     image: YOUR_DOCKERHUB_USERNAME/aigc-vault-backend:latest
     container_name: aigc-backend
+    # 从 .env 文件读取环境变量
+    env_file:
+      - .env
+    # 也可以在这里直接设置环境变量（会覆盖 .env 文件中的值）
     environment:
       # 数据库配置 - 如果使用上面的 postgres 服务，使用 postgres:5432
+      # 如果使用外部数据库，在 .env 文件中修改 DATABASE_URL
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/aigc_vault
-      # 如果使用外部数据库，修改为：
-      # DATABASE_URL: postgresql://user:password@host:5432/database
-      
-      # RustFS/S3 配置（修改为实际配置）
-      RUSTFS_ENDPOINT_URL: http://192.168.31.3:9900
-      RUSTFS_ACCESS_KEY: your_access_key
-      RUSTFS_SECRET_KEY: your_secret_key
-      RUSTFS_BUCKET: aigcvault
-      RUSTFS_REGION: us-east-1
-      RUSTFS_USE_SSL: "false"
-      
-      # CORS 配置（修改为 NAS 的实际访问地址）
-      CORS_ORIGINS: http://localhost,http://localhost:80
-      
-      # 日志配置
-      LOG_LEVEL: INFO
     ports:
       - "8000:8000"
     depends_on:
@@ -61,6 +50,10 @@ services:
   frontend:
     image: YOUR_DOCKERHUB_USERNAME/aigc-vault-frontend:latest
     container_name: aigc-frontend
+    environment:
+      # 后端服务配置（用于 nginx 代理）
+      BACKEND_HOST: backend
+      BACKEND_PORT: 8000
     ports:
       - "80:80"
     depends_on:

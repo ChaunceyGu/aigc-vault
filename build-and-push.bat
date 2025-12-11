@@ -36,7 +36,28 @@ if errorlevel 1 (
 
 REM 构建前端镜像
 echo [3/4] 正在构建前端镜像...
-docker build -f Dockerfile.frontend -t %DOCKER_USERNAME%/aigc-vault-frontend:latest .
+
+REM 从 .env 文件读取配置（如果存在）
+if exist .env (
+    echo 📝 从 .env 文件读取配置...
+    REM 读取 VITE_API_BASE_URL（如果存在）
+    findstr /C:"VITE_API_BASE_URL" .env >nul
+    if not errorlevel 1 (
+        for /f "tokens=2 delims==" %%a in ('findstr /C:"VITE_API_BASE_URL" .env') do (
+            set VITE_API_BASE_URL=%%a
+            set VITE_API_BASE_URL=!VITE_API_BASE_URL:"=!
+            set VITE_API_BASE_URL=!VITE_API_BASE_URL:'=!
+            echo    使用 VITE_API_BASE_URL=!VITE_API_BASE_URL!
+            docker build -f Dockerfile.frontend --build-arg VITE_API_BASE_URL=!VITE_API_BASE_URL! -t %DOCKER_USERNAME%/aigc-vault-frontend:latest .
+        )
+    ) else (
+        docker build -f Dockerfile.frontend -t %DOCKER_USERNAME%/aigc-vault-frontend:latest .
+    )
+) else (
+    echo ⚠️  未找到 .env 文件，使用默认配置
+    docker build -f Dockerfile.frontend -t %DOCKER_USERNAME%/aigc-vault-frontend:latest .
+)
+
 if errorlevel 1 (
     echo ❌ 前端镜像构建失败
     exit /b 1
