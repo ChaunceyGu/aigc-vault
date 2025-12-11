@@ -38,8 +38,7 @@
 │   ├── scripts/          # 工具脚本
 │   └── requirements.txt
 ├── migrations/            # 数据库迁移脚本
-├── docker-compose.yml    # Docker Compose 配置（使用镜像）
-├── docker-compose.build.yml  # Docker Compose 配置（本地构建）
+├── docker-compose.yml    # Docker Compose 配置（统一配置，支持镜像和本地构建）
 ├── Dockerfile.backend     # 后端 Dockerfile
 ├── Dockerfile.frontend    # 前端 Dockerfile
 └── nginx.conf.template    # Nginx 配置模板
