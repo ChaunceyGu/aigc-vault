@@ -19,7 +19,7 @@ import {
   Badge,
   Popconfirm,
 } from 'antd'
-import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined, DownloadOutlined } from '@ant-design/icons'
 import { getLogDetail, deleteLog, type LogDetail } from '../services/logs'
 
 const { Title, Text } = Typography
@@ -107,12 +107,16 @@ const LogDetailPage: React.FC = () => {
       await navigator.clipboard.writeText(text)
       setCopiedText(text)
       message.success({
-        content: `${label}已复制到剪贴板`,
-        duration: 2,
+        content: `✅ ${label}已复制`,
+        duration: 1.5,
+        icon: <CheckOutlined style={{ color: '#52c41a' }} />,
       })
       setTimeout(() => setCopiedText(null), 2000)
     } catch (error) {
-      message.error('复制失败，请手动复制')
+      message.error({
+        content: '复制失败，请手动复制',
+        duration: 2,
+      })
     }
   }
 
@@ -139,6 +143,46 @@ const LogDetailPage: React.FC = () => {
     }
   }
 
+  // 下载图片
+  const downloadImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
+      message.success('下载成功')
+    } catch (error) {
+      console.error('下载失败:', error)
+      message.error('下载失败，请重试')
+    }
+  }
+
+  // 批量下载所有输出图片
+  const handleDownloadAll = async () => {
+    if (!log || !log.output_assets || log.output_assets.length === 0) {
+      message.warning('没有可下载的图片')
+      return
+    }
+
+    for (let i = 0; i < log.output_assets.length; i++) {
+      const asset = log.output_assets[i]
+      const filename = asset.note 
+        ? `${log.title}_${asset.note}_${i + 1}.jpg`
+        : `${log.title}_${i + 1}.jpg`
+      await downloadImage(asset.url, filename)
+      // 避免下载过快导致浏览器阻止
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+
+    message.success(`成功下载 ${log.output_assets.length} 张图片`)
+  }
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '48px' }}>
@@ -147,8 +191,29 @@ const LogDetailPage: React.FC = () => {
     )
   }
 
+  if (!log && !loading) {
+    return (
+      <div style={{ 
+        textAlign: 'center', 
+        padding: '80px 20px',
+        maxWidth: 600,
+        margin: '0 auto',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>😕</div>
+        <div style={{ fontSize: 18, color: '#666', marginBottom: 8 }}>记录不存在</div>
+        <Button 
+          type="primary" 
+          onClick={() => navigate('/')}
+          style={{ marginTop: 16 }}
+        >
+          返回首页
+        </Button>
+      </div>
+    )
+  }
+
   if (!log) {
-    return <div>记录不存在</div>
+    return null
   }
 
   const handleDelete = async () => {
@@ -159,6 +224,8 @@ const LogDetailPage: React.FC = () => {
         content: '删除成功',
         duration: 2,
       })
+      // 设置刷新标志，返回首页时自动刷新
+      sessionStorage.setItem('refreshHomePage', 'true')
       navigate('/')
     } catch (error: any) {
       console.error('删除失败:', error)
@@ -171,7 +238,7 @@ const LogDetailPage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: 1600, margin: '0 auto', padding: '0 24px 24px' }}>
+    <div style={{ maxWidth: 1600, margin: '0 auto', padding: '24px' }}>
       {/* 顶部操作栏 */}
       <div style={{ 
         marginBottom: 24, 
@@ -561,17 +628,28 @@ const LogDetailPage: React.FC = () => {
             {/* 生成结果区 */}
             <Card 
               title={
-                <div style={{ fontSize: 18, fontWeight: 600, color: '#262626', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>🎨 生成样张</span>
-                  <Badge 
-                    count={log.output_assets.length} 
-                    style={{ 
-                      marginLeft: 0,
-                      backgroundColor: '#1890ff',
-                      boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)',
-                    }}
-                    overflowCount={99}
-                  />
+                <div style={{ fontSize: 18, fontWeight: 600, color: '#262626', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>🎨 生成样张</span>
+                    <Badge 
+                      count={log.output_assets.length} 
+                      style={{ 
+                        marginLeft: 0,
+                        backgroundColor: '#1890ff',
+                        boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)',
+                      }}
+                      overflowCount={99}
+                    />
+                  </div>
+                  {log.output_assets.length > 0 && (
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={handleDownloadAll}
+                      size="small"
+                    >
+                      下载全部 ({log.output_assets.length})
+                    </Button>
+                  )}
                 </div>
               }
               style={{ 
@@ -613,11 +691,15 @@ const LogDetailPage: React.FC = () => {
                         e.currentTarget.style.borderColor = '#1890ff'
                         e.currentTarget.style.transform = 'scale(1.03)'
                         e.currentTarget.style.boxShadow = '0 8px 24px rgba(24, 144, 255, 0.3)'
+                        const downloadBtn = e.currentTarget.querySelector('.image-download-btn') as HTMLElement
+                        if (downloadBtn) downloadBtn.style.opacity = '1'
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.borderColor = 'transparent'
                         e.currentTarget.style.transform = 'scale(1)'
                         e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)'
+                        const downloadBtn = e.currentTarget.querySelector('.image-download-btn') as HTMLElement
+                        if (downloadBtn) downloadBtn.style.opacity = '0'
                       }}
                     >
                       <Image
@@ -642,6 +724,36 @@ const LogDetailPage: React.FC = () => {
                           </div>
                         }
                       />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          opacity: 0,
+                          transition: 'opacity 0.3s',
+                          zIndex: 10,
+                        }}
+                        className="image-download-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const filename = asset.note 
+                            ? `${log.title}_${asset.note}_${index + 1}.jpg`
+                            : `${log.title}_${index + 1}.jpg`
+                          downloadImage(asset.url, filename)
+                        }}
+                      >
+                        <Button
+                          type="primary"
+                          shape="circle"
+                          icon={<DownloadOutlined />}
+                          size="small"
+                          style={{
+                            background: 'rgba(24, 144, 255, 0.9)',
+                            border: 'none',
+                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                          }}
+                        />
+                      </div>
                     </div>
                   </Col>
                 ))}

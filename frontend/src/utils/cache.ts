@@ -76,6 +76,21 @@ class SimpleCache {
 
     return true
   }
+
+  /**
+   * 清除所有以指定前缀开头的缓存
+   */
+  clearByPrefix(prefix: string): void {
+    const keysToDelete: string[] = []
+    // 遍历所有缓存键
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) {
+        keysToDelete.push(key)
+      }
+    }
+    // 删除匹配的缓存
+    keysToDelete.forEach(key => this.cache.delete(key))
+  }
 }
 
 // 导出单例

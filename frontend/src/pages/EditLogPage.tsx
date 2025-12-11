@@ -102,6 +102,8 @@ const EditLogPage: React.FC = () => {
       })
 
       message.success('更新成功！')
+      // 设置刷新标志，返回首页时自动刷新
+      sessionStorage.setItem('refreshHomePage', 'true')
       navigate(`/logs/${id}`)
     } catch (error: any) {
       console.error('更新失败:', error)

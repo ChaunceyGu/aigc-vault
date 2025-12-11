@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from 'antd'
 import AppHeader from './components/layout/AppHeader'
+import BackToTop from './components/BackToTop'
 import HomePage from './pages/HomePage'
 import CreateLogPage from './pages/CreateLogPage'
 import LogDetailPage from './pages/LogDetailPage'
@@ -15,7 +16,7 @@ function App() {
         <AppHeader />
         <Content style={{ 
           padding: '24px', 
-          background: '#f5f5f5',
+          background: 'linear-gradient(to bottom, #fafafa 0%, #f5f5f5 100%)',
           minHeight: 'calc(100vh - 64px - 70px)',
         }}>
           <Routes>
@@ -24,6 +25,7 @@ function App() {
             <Route path="/logs/:id" element={<LogDetailPage />} />
             <Route path="/logs/:id/edit" element={<EditLogPage />} />
           </Routes>
+          <BackToTop />
         </Content>
         <Footer style={{ 
           textAlign: 'center',

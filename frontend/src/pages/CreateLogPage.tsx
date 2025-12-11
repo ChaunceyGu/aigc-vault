@@ -149,6 +149,8 @@ const CreateLogPage: React.FC = () => {
         content: '创建成功！',
         duration: 2,
       })
+      // 设置刷新标志，返回首页时自动刷新
+      sessionStorage.setItem('refreshHomePage', 'true')
       navigate('/')
     } catch (error: any) {
       console.error('创建失败:', error)

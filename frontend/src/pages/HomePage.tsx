@@ -19,14 +19,16 @@ import {
   message,
   Skeleton,
   Tooltip,
+  Checkbox,
+  Popconfirm,
 } from 'antd'
-import { SearchOutlined, ReloadOutlined, EyeOutlined, PictureOutlined } from '@ant-design/icons'
-import { getLogList, type LogItem } from '../services/logs'
+import { SearchOutlined, ReloadOutlined, EyeOutlined, PictureOutlined, CheckSquareOutlined, DeleteOutlined, SortAscendingOutlined, AppstoreOutlined, UnorderedListOutlined, DownloadOutlined } from '@ant-design/icons'
+import { getLogList, deleteLog, type LogItem } from '../services/logs'
 import { getTagStats } from '../services/tags'
 import type { TagStats } from '../services/tags'
 import { cache } from '../utils/cache'
 
-const { Search } = Input
+// Search 组件已移除，改用 Space.Compact
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate()
@@ -42,21 +44,74 @@ const HomePage: React.FC = () => {
   const [selectedTool, setSelectedTool] = useState<string | undefined>()
   const [selectedModel, setSelectedModel] = useState<string | undefined>()
   
+  // 排序
+  const [sortBy, setSortBy] = useState<'time_desc' | 'time_asc' | 'title_asc' | 'title_desc'>('time_desc')
+  
+  // 批量选择
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  
+  // 视图模式：grid（网格）或 waterfall（瀑布流）
+  // 从 sessionStorage 恢复视图模式，如果没有则默认为 grid
+  const [viewMode, setViewMode] = useState<'grid' | 'waterfall'>(() => {
+    const savedViewMode = sessionStorage.getItem('viewMode') as 'grid' | 'waterfall' | null
+    return savedViewMode || 'grid'
+  })
+  
+  // 保存视图模式到 sessionStorage
+  const handleViewModeChange = (mode: 'grid' | 'waterfall') => {
+    setViewMode(mode)
+    sessionStorage.setItem('viewMode', mode)
+  }
+  
   // 标签数据
   const [tagStats, setTagStats] = useState<TagStats>({ tools: {}, models: {} })
 
   useEffect(() => {
-    loadLogs()
-    loadTagStats()
-  }, [page, pageSize, search, logType, selectedTool, selectedModel])
+    // 检查是否需要刷新（从创建/编辑页面返回时）
+    const shouldRefresh = sessionStorage.getItem('refreshHomePage')
+    if (shouldRefresh === 'true') {
+      sessionStorage.removeItem('refreshHomePage')
+      loadLogs(true) // 强制刷新
+      loadTagStats(true) // 强制刷新标签统计
+    } else {
+      loadLogs()
+      loadTagStats()
+    }
+  }, [page, pageSize, search, logType, selectedTool, selectedModel, sortBy])
 
-  const loadLogs = async () => {
-    // 构建缓存键
-    const cacheKey = `logs_${page}_${pageSize}_${search || ''}_${logType || ''}_${selectedTool || ''}_${selectedModel || ''}`
+  // 搜索快捷键：按 / 键聚焦搜索框
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // 按 / 键聚焦搜索框（不在输入框中时）
+      if (e.key === '/' && e.target !== document.body && 
+          (e.target as HTMLElement).tagName !== 'INPUT' && 
+          (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+        e.preventDefault()
+        const searchInput = document.querySelector('input[placeholder*="搜索"]') as HTMLInputElement
+        if (searchInput) {
+          searchInput.focus()
+          searchInput.select()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [])
+
+  const loadLogs = async (forceRefresh = false) => {
+    // 构建缓存键（包含排序）
+    const cacheKey = `logs_${page}_${pageSize}_${search || ''}_${logType || ''}_${selectedTool || ''}_${selectedModel || ''}_${sortBy}`
+    
+    // 如果强制刷新，清除所有日志相关的缓存
+    if (forceRefresh) {
+      cache.clearByPrefix('logs_')
+    }
     
     // 检查缓存
     const cached = cache.get<{ items: LogItem[], total: number }>(cacheKey)
-    if (cached && !loading) {
+    if (cached && !loading && !forceRefresh) {
+      // 从缓存读取时也要应用排序（虽然缓存中已经是排序后的）
       setLogs(cached.items)
       setTotal(cached.total)
       return
@@ -72,11 +127,28 @@ const HomePage: React.FC = () => {
         tool: selectedTool,
         model: selectedModel,
       })
-      setLogs(response.items)
+      // 应用排序
+      let sortedItems = [...response.items]
+      switch (sortBy) {
+        case 'time_desc':
+          sortedItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          break
+        case 'time_asc':
+          sortedItems.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          break
+        case 'title_asc':
+          sortedItems.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+          break
+        case 'title_desc':
+          sortedItems.sort((a, b) => b.title.localeCompare(a.title, 'zh-CN'))
+          break
+      }
+      
+      setLogs(sortedItems)
       setTotal(response.total)
       
       // 缓存结果（1分钟）
-      cache.set(cacheKey, { items: response.items, total: response.total }, 60 * 1000)
+      cache.set(cacheKey, { items: sortedItems, total: response.total }, 60 * 1000)
     } catch (error: any) {
       console.error('加载列表失败:', error)
       const errorMessage = error?.message || '加载列表失败，请刷新页面重试'
@@ -89,11 +161,17 @@ const HomePage: React.FC = () => {
     }
   }
 
-  const loadTagStats = async () => {
+  const loadTagStats = async (forceRefresh = false) => {
     // 缓存标签统计（5分钟）
     const cacheKey = 'tag_stats'
+    
+    // 如果强制刷新，清除缓存
+    if (forceRefresh) {
+      cache.delete(cacheKey)
+    }
+    
     const cached = cache.get<TagStats>(cacheKey)
-    if (cached) {
+    if (cached && !forceRefresh) {
       setTagStats(cached)
       return
     }
@@ -118,8 +196,98 @@ const HomePage: React.FC = () => {
   }
 
   const handleRefresh = () => {
-    loadLogs()
-    loadTagStats()
+    loadLogs(true) // 强制刷新
+    loadTagStats(true) // 强制刷新标签统计
+    setSelectedIds([])
+  }
+
+  // 切换选择模式
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode)
+    setSelectedIds([])
+  }
+
+  // 切换单个选择
+  const toggleSelect = (id: number) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id))
+    } else {
+      setSelectedIds([...selectedIds, id])
+    }
+  }
+
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (selectedIds.length === logs.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(logs.map(log => log.id))
+    }
+  }
+
+  // 下载图片
+  const downloadImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
+      message.success('下载成功')
+    } catch (error) {
+      console.error('下载失败:', error)
+      message.error('下载失败，请重试')
+    }
+  }
+
+  // 批量下载选中记录的图片
+  const handleBatchDownload = async () => {
+    if (selectedIds.length === 0) {
+      message.warning('请先选择要下载的记录')
+      return
+    }
+
+    const selectedLogs = logs.filter(log => selectedIds.includes(log.id))
+    let downloadCount = 0
+
+    for (const log of selectedLogs) {
+      if (log.preview_urls && log.preview_urls.length > 0) {
+        for (let i = 0; i < log.preview_urls.length; i++) {
+          const url = log.preview_urls[i]
+          const filename = `${log.title}_${i + 1}.jpg`
+          await downloadImage(url, filename)
+          downloadCount++
+          // 避免下载过快导致浏览器阻止
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
+      }
+    }
+
+    message.success(`成功下载 ${downloadCount} 张图片`)
+  }
+
+  // 批量删除
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) {
+      message.warning('请先选择要删除的记录')
+      return
+    }
+
+    try {
+      await Promise.all(selectedIds.map(id => deleteLog(id)))
+      message.success(`成功删除 ${selectedIds.length} 条记录`)
+      setSelectedIds([])
+      setSelectionMode(false)
+      loadLogs(true) // 强制刷新，清除缓存
+      loadTagStats(true) // 强制刷新标签统计
+    } catch (error: any) {
+      message.error('批量删除失败：' + (error?.message || '未知错误'))
+    }
   }
 
   return (
@@ -135,14 +303,29 @@ const HomePage: React.FC = () => {
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={12} md={10}>
-              <Search
-                placeholder="搜索标题、提示词..."
-                allowClear
-                enterButton={<SearchOutlined />}
-                onSearch={handleSearch}
-                onChange={(e) => !e.target.value && setSearch('')}
-                size="large"
-              />
+              <Space.Compact style={{ width: '100%' }}>
+                <Input
+                  placeholder="搜索标题、提示词... (按 / 键快速搜索)"
+                  allowClear
+                  onChange={(e) => {
+                    if (!e.target.value) setSearch('')
+                  }}
+                  onPressEnter={(e) => handleSearch((e.target as HTMLInputElement).value)}
+                  size="large"
+                  style={{ flex: 1 }}
+                />
+                <Button 
+                  icon={<SearchOutlined />} 
+                  onClick={() => {
+                    const input = document.querySelector('input[placeholder*="搜索"]') as HTMLInputElement
+                    if (input) handleSearch(input.value)
+                  }}
+                  size="large"
+                  type="primary"
+                >
+                  搜索
+                </Button>
+              </Space.Compact>
             </Col>
             <Col xs={12} sm={6} md={4}>
               <Select
@@ -199,20 +382,92 @@ const HomePage: React.FC = () => {
             </Col>
           </Row>
           
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {total > 0 && (
-              <span style={{ color: '#666', fontSize: 14 }}>
-                共找到 <strong style={{ color: '#1890ff' }}>{total}</strong> 条记录
-              </span>
-            )}
-            <Button 
-              icon={<ReloadOutlined />} 
-              onClick={handleRefresh}
-              loading={loading}
-            >
-              刷新
-            </Button>
-          </div>
+          <Row gutter={[16, 16]} align="middle">
+            <Col flex="auto">
+              {total > 0 && (
+                <span style={{ color: '#666', fontSize: 14 }}>
+                  共找到 <strong style={{ color: '#1890ff' }}>{total}</strong> 条记录
+                  {selectionMode && selectedIds.length > 0 && (
+                    <span style={{ marginLeft: 12, color: '#ff4d4f' }}>
+                      （已选择 <strong>{selectedIds.length}</strong> 条）
+                    </span>
+                  )}
+                </span>
+              )}
+            </Col>
+            <Col>
+              <Space>
+                <Select
+                  value={sortBy}
+                  onChange={setSortBy}
+                  style={{ width: 140 }}
+                  size="large"
+                  suffixIcon={<SortAscendingOutlined />}
+                >
+                  <Select.Option value="time_desc">最新优先</Select.Option>
+                  <Select.Option value="time_asc">最旧优先</Select.Option>
+                  <Select.Option value="title_asc">标题 A-Z</Select.Option>
+                  <Select.Option value="title_desc">标题 Z-A</Select.Option>
+                </Select>
+                <Tooltip title={viewMode === 'grid' ? '切换到瀑布流视图' : '切换到网格视图'}>
+                  <Button
+                    icon={viewMode === 'grid' ? <UnorderedListOutlined /> : <AppstoreOutlined />}
+                    onClick={() => handleViewModeChange(viewMode === 'grid' ? 'waterfall' : 'grid')}
+                    size="large"
+                  />
+                </Tooltip>
+                <Button
+                  icon={<CheckSquareOutlined />}
+                  onClick={toggleSelectionMode}
+                  type={selectionMode ? 'primary' : 'default'}
+                  size="large"
+                >
+                  {selectionMode ? '取消选择' : '批量选择'}
+                </Button>
+                {selectionMode && selectedIds.length > 0 && (
+                  <>
+                    <Button
+                      onClick={toggleSelectAll}
+                      size="large"
+                    >
+                      {selectedIds.length === logs.length ? '取消全选' : '全选'}
+                    </Button>
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={handleBatchDownload}
+                      size="large"
+                    >
+                      批量下载 ({selectedIds.length})
+                    </Button>
+                    <Popconfirm
+                      title={`确定要删除选中的 ${selectedIds.length} 条记录吗？`}
+                      description="删除后将无法恢复，所有关联的图片文件也会被删除。"
+                      onConfirm={handleBatchDelete}
+                      okText="确定"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button
+                        icon={<DeleteOutlined />}
+                        danger
+                        size="large"
+                      >
+                        批量删除 ({selectedIds.length})
+                      </Button>
+                    </Popconfirm>
+                  </>
+                )}
+                <Button 
+                  icon={<ReloadOutlined />} 
+                  onClick={handleRefresh}
+                  loading={loading}
+                  size="large"
+                >
+                  刷新
+                </Button>
+              </Space>
+            </Col>
+          </Row>
         </Space>
       </Card>
 
@@ -236,13 +491,29 @@ const HomePage: React.FC = () => {
         </Row>
       ) : logs.length === 0 ? (
         <Empty 
-          description="暂无数据" 
+          description={
+            <span style={{ fontSize: 16, color: '#8c8c8c' }}>
+              暂无数据，
+              <a 
+                onClick={() => navigate('/create')}
+                style={{ 
+                  color: '#1890ff',
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  marginLeft: 4,
+                }}
+              >
+                创建第一条记录
+              </a>
+            </span>
+          }
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          style={{ padding: '60px 0' }}
+          style={{ padding: '80px 0' }}
         />
       ) : (
-        <>
-          <Row gutter={[20, 20]}>
+        viewMode === 'grid' ? (
+          <>
+            <Row gutter={[20, 20]}>
             {logs.map((log, index) => (
               <Col 
                 key={log.id} 
@@ -443,20 +714,50 @@ const HomePage: React.FC = () => {
                       </div>
                     )
                   }
-                  onClick={() => handleCardClick(log.id)}
+                  onClick={() => {
+                    if (selectionMode) {
+                      toggleSelect(log.id)
+                    } else {
+                      handleCardClick(log.id)
+                    }
+                  }}
                   style={{ 
-                    cursor: 'pointer',
+                    cursor: selectionMode ? 'default' : 'pointer',
                     borderRadius: 12,
                     overflow: 'hidden',
-                    border: '1px solid #e8e8e8',
+                    border: selectedIds.includes(log.id) ? '2px solid #1890ff' : '1px solid #e8e8e8',
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
-                    background: '#fff',
+                    background: selectedIds.includes(log.id) ? '#e6f7ff' : '#fff',
+                    position: 'relative',
                   }}
                   bodyStyle={{ padding: '14px', flex: 1, display: 'flex', flexDirection: 'column' }}
                   className="log-card"
                 >
+                  {selectionMode && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      zIndex: 10,
+                    }}>
+                      <Checkbox
+                        checked={selectedIds.includes(log.id)}
+                        onChange={(e) => {
+                          e.stopPropagation()
+                          toggleSelect(log.id)
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          background: '#fff',
+                          borderRadius: '50%',
+                          padding: 4,
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                        }}
+                      />
+                    </div>
+                  )}
                   <Card.Meta
                     title={
                       <Tooltip title={log.title}>
@@ -556,6 +857,13 @@ const HomePage: React.FC = () => {
                   />
                 </Card>
                 <style>{`
+                  .log-card {
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                  }
+                  .log-card:hover {
+                    transform: translateY(-4px);
+                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+                  }
                   .log-card:hover .image-hover-info {
                     opacity: 1 !important;
                   }
@@ -568,6 +876,16 @@ const HomePage: React.FC = () => {
                   }
                   .log-card:hover .image-preview-mask {
                     opacity: 1;
+                  }
+                  @keyframes fadeIn {
+                    from {
+                      opacity: 0;
+                      transform: translateY(10px);
+                    }
+                    to {
+                      opacity: 1;
+                      transform: translateY(0);
+                    }
                   }
                 `}</style>
               </Col>
@@ -601,10 +919,135 @@ const HomePage: React.FC = () => {
               />
             </div>
           )}
-        </>
+          </>
+        ) : (
+          /* 瀑布流视图 - 纯图片展示，无任何标签和参数 */
+          <div 
+            className="waterfall-container"
+            style={{
+              columnCount: window.innerWidth > 1400 ? 5 : window.innerWidth > 1200 ? 4 : window.innerWidth > 900 ? 3 : 2,
+              columnGap: 16,
+            }}
+          >
+            {logs.map((log, index) => {
+              const coverImage = log.cover_url || (log.preview_urls && log.preview_urls[0])
+              
+              return (
+                <div
+                  key={log.id}
+                  onClick={() => {
+                    if (selectionMode) {
+                      toggleSelect(log.id)
+                    } else {
+                      handleCardClick(log.id)
+                    }
+                  }}
+                  style={{
+                    breakInside: 'avoid',
+                    marginBottom: 16,
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                    border: selectedIds.includes(log.id) ? '3px solid #1890ff' : '2px solid transparent',
+                    position: 'relative',
+                    animation: `fadeIn 0.3s ease-out ${index * 0.02}s both`,
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    display: 'inline-block',
+                    width: '100%',
+                    cursor: 'pointer',
+                  }}
+                  className="waterfall-card"
+                >
+                  {selectionMode && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      zIndex: 10,
+                    }}>
+                      <Checkbox
+                        checked={selectedIds.includes(log.id)}
+                        onChange={(e) => {
+                          e.stopPropagation()
+                          toggleSelect(log.id)
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          background: '#fff',
+                          borderRadius: '50%',
+                          padding: 4,
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      />
+                    </div>
+                  )}
+                  
+                  {/* 纯图片展示 */}
+                  {coverImage ? (
+                    <Image
+                      src={coverImage}
+                      alt={log.title}
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        display: 'block',
+                        transition: 'transform 0.3s ease',
+                      }}
+                      preview={{
+                        src: coverImage,
+                      }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div style={{
+                      width: '100%',
+                      aspectRatio: '1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                    }}>
+                      <PictureOutlined style={{ fontSize: 48, opacity: 0.3, color: '#999' }} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          
+          {/* 分页 - 瀑布流中需要单独显示 */}
+          {total > pageSize && (
+            <div style={{ 
+              textAlign: 'center', 
+              marginTop: 32,
+              padding: '24px 0',
+              width: '100%',
+              columnSpan: 'all',
+            }}>
+              <Pagination
+                current={page}
+                pageSize={pageSize}
+                total={total}
+                onChange={(newPage, newPageSize) => {
+                  setPage(newPage)
+                  if (newPageSize !== pageSize) {
+                    setPageSize(newPageSize)
+                  }
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+                showSizeChanger
+                showQuickJumper
+                showTotal={(total, range) => 
+                  `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+                }
+                pageSizeOptions={['12', '20', '40', '60']}
+              />
+            </div>
+          )}
+          </div>
+        )
       )}
     </div>
   )
 }
 
 export default HomePage
+
