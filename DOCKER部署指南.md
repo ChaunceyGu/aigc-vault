@@ -23,9 +23,13 @@
 
 `docker-compose.yml` 文件同时支持两种部署方式，你可以根据需要选择：
 
-### 方式一：使用 Docker Hub 镜像（推荐用于生产环境）
+### 方式一：使用 Docker Hub 镜像（默认，推荐用于生产环境）
 
-如果你已经有构建好的 Docker 镜像，这是最简单的部署方式。
+`docker-compose.yml` 已默认配置好 Docker Hub 镜像，这是最简单的部署方式。
+
+**Docker Hub 镜像地址**：
+- 后端：`chaunceygu178/aigc-vault-backend:latest`
+- 前端：`chaunceygu178/aigc-vault-frontend:latest`
 
 #### 1. 准备配置文件
 
@@ -50,30 +54,15 @@ CORS_ORIGINS=http://localhost,http://localhost:80,http://192.168.1.100
 LOG_LEVEL=INFO
 ```
 
-#### 2. 修改 docker-compose.yml
+#### 2. 启动服务
 
-编辑 `docker-compose.yml`，取消注释 `image` 行，并设置正确的镜像名称：
+直接启动即可，Docker Compose 会自动从 Docker Hub 拉取镜像：
 
-```yaml
-services:
-  backend:
-    # 取消注释下面这行，并设置你的镜像名称
-    image: YOUR_DOCKERHUB_USERNAME/aigc-vault-backend:latest
-    # 注释掉 build 部分（如果存在）
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile.backend
-
-  frontend:
-    # 取消注释下面这行，并设置你的镜像名称
-    image: YOUR_DOCKERHUB_USERNAME/aigc-vault-frontend:latest
-    # 注释掉 build 部分（如果存在）
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile.frontend
+```bash
+docker-compose up -d
 ```
 
-**注意**：如果同时设置了 `image` 和 `build`，Docker Compose 会优先使用 `image`（从 Docker Hub 拉取）。
+**注意**：`docker-compose.yml` 中已配置好镜像名称，无需修改。如果需要使用其他镜像，可以编辑 `docker-compose.yml` 修改 `image` 字段。
 
 #### 3. 启动服务
 
@@ -107,21 +96,21 @@ docker-compose logs -f postgres
 
 创建 `.env` 文件（在项目根目录），配置方式同方式一。
 
-#### 2. 确认 docker-compose.yml 配置
+#### 2. 修改 docker-compose.yml 配置
 
-确保 `docker-compose.yml` 中的 `build` 部分已启用（默认已启用），`image` 部分已注释：
+编辑 `docker-compose.yml`，注释掉 `image` 行，取消注释 `build` 部分：
 
 ```yaml
 services:
   backend:
-    # image: YOUR_DOCKERHUB_USERNAME/aigc-vault-backend:latest  # 已注释
-    build:  # 已启用
+    # image: chaunceygu178/aigc-vault-backend:latest  # 注释掉这行
+    build:  # 取消注释这部分
       context: .
       dockerfile: Dockerfile.backend
 
   frontend:
-    # image: YOUR_DOCKERHUB_USERNAME/aigc-vault-frontend:latest  # 已注释
-    build:  # 已启用
+    # image: chaunceygu178/aigc-vault-frontend:latest  # 注释掉这行
+    build:  # 取消注释这部分
       context: .
       dockerfile: Dockerfile.frontend
 ```

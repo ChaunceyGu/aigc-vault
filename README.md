@@ -133,23 +133,26 @@ python scripts/verify_rustfs.py
 
 #### 快速部署
 
-`docker-compose.yml` 同时支持两种方式：
+`docker-compose.yml` 默认使用 Docker Hub 镜像，也支持本地构建：
 
-**方式一：使用 Docker Hub 镜像**
+**方式一：使用 Docker Hub 镜像（默认，推荐）**
 ```bash
-# 1. 编辑 docker-compose.yml，取消注释 image 行并设置镜像名称
-# 2. 配置环境变量（创建 .env 文件）
-# 3. 启动服务
+# 1. 配置环境变量（创建 .env 文件）
+# 2. 启动服务（自动从 Docker Hub 拉取镜像）
 docker-compose up -d
 ```
 
 **方式二：本地构建镜像**
 ```bash
-# 1. 确保 docker-compose.yml 中的 build 配置已启用（默认已启用）
+# 1. 编辑 docker-compose.yml，注释掉 image 行，取消注释 build 部分
 # 2. 配置环境变量（创建 .env 文件）
 # 3. 构建并启动
 docker-compose up -d --build
 ```
+
+**Docker Hub 镜像地址**：
+- 后端：`chaunceygu178/aigc-vault-backend:latest`
+- 前端：`chaunceygu178/aigc-vault-frontend:latest`
 
 ## 📖 API 文档
 

@@ -23,17 +23,17 @@ services:
 
   # 后端服务
   # 使用方式：
-  # 1. 如果有 Docker Hub 镜像，取消下面的 image 注释，并设置正确的镜像名称
-  # 2. 如果需要本地构建，取消下面的 build 注释
+  # 1. 使用 Docker Hub 镜像（默认，推荐用于生产环境）
+  # 2. 如果需要本地构建，注释掉 image 行，取消注释 build 部分
   # 注意：如果同时设置了 image 和 build，Docker Compose 会优先使用 image
   backend:
     # 方式一：使用 Docker Hub 镜像（推荐用于生产环境）
-    # image: YOUR_DOCKERHUB_USERNAME/aigc-vault-backend:latest
+    image: chaunceygu178/aigc-vault-backend:latest
     
-    # 方式二：本地构建镜像（推荐用于开发或没有 Docker Hub 的情况）
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    # 方式二：本地构建镜像（如需本地构建，取消下面注释并注释掉上面的 image）
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.backend
     
     container_name: aigc-backend
     
@@ -77,13 +77,13 @@ services:
   # 前端服务
   # 使用方式同后端服务
   frontend:
-    # 方式一：使用 Docker Hub 镜像
-    # image: YOUR_DOCKERHUB_USERNAME/aigc-vault-frontend:latest
+    # 方式一：使用 Docker Hub 镜像（推荐用于生产环境）
+    image: chaunceygu178/aigc-vault-frontend:latest
     
-    # 方式二：本地构建镜像
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
+    # 方式二：本地构建镜像（如需本地构建，取消下面注释并注释掉上面的 image）
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.frontend
     
     container_name: aigc-frontend
     
