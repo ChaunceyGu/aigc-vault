@@ -28,8 +28,8 @@
 `docker-compose.yml` 已默认配置好 Docker Hub 镜像，这是最简单的部署方式。
 
 **Docker Hub 镜像地址**：
-- 后端：`chaunceygu178/aigc-vault-backend:latest`
-- 前端：`chaunceygu178/aigc-vault-frontend:latest`
+- API 服务：`chaunceygu178/aigc-vault-api:latest`
+- Web 服务：`chaunceygu178/aigc-vault-web:latest`
 
 #### 1. 准备配置文件
 
@@ -77,8 +77,8 @@ docker-compose up -d
 docker-compose logs -f
 
 # 查看特定服务日志
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker-compose logs -f api
+docker-compose logs -f web
 docker-compose logs -f postgres
 ```
 
@@ -102,17 +102,17 @@ docker-compose logs -f postgres
 
 ```yaml
 services:
-  backend:
-    # image: chaunceygu178/aigc-vault-backend:latest  # 注释掉这行
+  api:
+    # image: chaunceygu178/aigc-vault-api:latest  # 注释掉这行
     build:  # 取消注释这部分
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: Dockerfile.api
 
-  frontend:
-    # image: chaunceygu178/aigc-vault-frontend:latest  # 注释掉这行
+  web:
+    # image: chaunceygu178/aigc-vault-web:latest  # 注释掉这行
     build:  # 取消注释这部分
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: Dockerfile.web
 ```
 
 #### 3. 构建并启动
@@ -155,7 +155,7 @@ docker-compose logs -f
 DATABASE_URL=postgresql://用户名:密码@数据库主机:5432/数据库名
 ```
 
-3. 删除 `backend` 服务的 `depends_on` 中的 `postgres` 依赖
+3. 删除 `api` 服务的 `depends_on` 中的 `postgres` 依赖
 
 ### RustFS/S3 配置
 
@@ -207,8 +207,8 @@ RUSTFS_USE_SSL=false
 
 所有服务默认使用 `aigc-network` 网络，服务之间可以通过服务名互相访问：
 
-- 后端访问数据库：`postgres:5432`
-- 前端访问后端：`backend:8000`
+- API 服务访问数据库：`postgres:5432`
+- Web 服务访问 API：`api:8000`
 
 ## 启动和管理
 
@@ -234,7 +234,7 @@ docker-compose down
 docker-compose restart
 
 # 重启特定服务
-docker-compose restart backend
+docker-compose restart api
 ```
 
 ### 查看服务状态
@@ -250,19 +250,19 @@ docker-compose ps
 docker-compose logs -f
 
 # 特定服务
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker-compose logs -f api
+docker-compose logs -f web
 docker-compose logs -f postgres
 
 # 最近 100 行
-docker-compose logs --tail=100 backend
+docker-compose logs --tail=100 api
 ```
 
 ### 进入容器
 
 ```bash
-# 进入后端容器
-docker-compose exec backend bash
+# 进入 API 服务容器
+docker-compose exec api bash
 
 # 进入数据库容器
 docker-compose exec postgres psql -U postgres -d aigc_vault
@@ -318,8 +318,8 @@ lsof -i :8000
 2. **查看详细日志**：
 
 ```bash
-docker-compose logs backend
-docker-compose logs frontend
+docker-compose logs api
+docker-compose logs web
 ```
 
 ### 数据库连接失败
@@ -345,8 +345,8 @@ docker-compose exec postgres pg_isready -U postgres
 1. **检查 RustFS 服务是否可访问**：
 
 ```bash
-# 从后端容器内测试
-docker-compose exec backend curl http://RUSTFS_HOST:PORT
+# 从 API 服务容器内测试
+docker-compose exec api curl http://RUSTFS_HOST:PORT
 ```
 
 2. **验证认证信息**：
@@ -361,19 +361,19 @@ docker-compose exec backend curl http://RUSTFS_HOST:PORT
 
 1. **检查 Nginx 配置**：
 
-前端容器使用 Nginx 代理后端请求，确保 `BACKEND_HOST` 和 `BACKEND_PORT` 环境变量正确。
+Web 服务容器使用 Nginx 代理 API 请求，确保 `BACKEND_HOST` 和 `BACKEND_PORT` 环境变量正确。
 
 2. **检查网络连接**：
 
 ```bash
-# 从前端容器测试后端连接
-docker-compose exec frontend wget -O- http://backend:8000/api/health
+# 从 Web 服务容器测试 API 连接
+docker-compose exec web wget -O- http://api:8000/api/health
 ```
 
 3. **查看 Nginx 日志**：
 
 ```bash
-docker-compose exec frontend cat /var/log/nginx/error.log
+docker-compose exec web cat /var/log/nginx/error.log
 ```
 
 ### 健康检查失败

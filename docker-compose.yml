@@ -21,21 +21,21 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # 后端服务
+  # API 服务（后端）
   # 使用方式：
   # 1. 使用 Docker Hub 镜像（默认，推荐用于生产环境）
   # 2. 如果需要本地构建，注释掉 image 行，取消注释 build 部分
   # 注意：如果同时设置了 image 和 build，Docker Compose 会优先使用 image
-  backend:
+  api:
     # 方式一：使用 Docker Hub 镜像（推荐用于生产环境）
-    image: chaunceygu178/aigc-vault-backend:latest
+    image: chaunceygu178/aigc-vault-api:latest
     
     # 方式二：本地构建镜像（如需本地构建，取消下面注释并注释掉上面的 image）
     # build:
     #   context: .
-    #   dockerfile: Dockerfile.backend
+    #   dockerfile: Dockerfile.api
     
-    container_name: aigc-backend
+    container_name: aigc-api
     
     # 从 .env 文件读取环境变量（推荐方式）
     env_file:
@@ -74,28 +74,28 @@ services:
       retries: 3
       start_period: 40s
 
-  # 前端服务
-  # 使用方式同后端服务
-  frontend:
+  # Web 服务（前端）
+  # 使用方式同 API 服务
+  web:
     # 方式一：使用 Docker Hub 镜像（推荐用于生产环境）
-    image: chaunceygu178/aigc-vault-frontend:latest
+    image: chaunceygu178/aigc-vault-web:latest
     
     # 方式二：本地构建镜像（如需本地构建，取消下面注释并注释掉上面的 image）
     # build:
     #   context: .
-    #   dockerfile: Dockerfile.frontend
+    #   dockerfile: Dockerfile.web
     
-    container_name: aigc-frontend
+    container_name: aigc-web
     
     environment:
-      # 后端服务配置（用于 nginx 代理）
-      BACKEND_HOST: backend
+      # API 服务配置（用于 nginx 代理）
+      BACKEND_HOST: api
       BACKEND_PORT: 8000
     
     ports:
       - "80:80"
     depends_on:
-      - backend
+      - api
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]

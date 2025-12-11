@@ -41,8 +41,8 @@
 │   └── requirements.txt
 ├── migrations/            # 数据库迁移脚本
 ├── docker-compose.yml    # Docker Compose 配置（统一配置，支持镜像和本地构建）
-├── Dockerfile.backend     # 后端 Dockerfile
-├── Dockerfile.frontend    # 前端 Dockerfile
+├── Dockerfile.api         # API 服务 Dockerfile
+├── Dockerfile.web         # Web 服务 Dockerfile
 └── nginx.conf.template    # Nginx 配置模板
 ```
 
@@ -151,8 +151,8 @@ docker-compose up -d --build
 ```
 
 **Docker Hub 镜像地址**：
-- 后端：`chaunceygu178/aigc-vault-backend:latest`
-- 前端：`chaunceygu178/aigc-vault-frontend:latest`
+- API 服务：`chaunceygu178/aigc-vault-api:latest`
+- Web 服务：`chaunceygu178/aigc-vault-web:latest`
 
 ## 📖 API 文档
 

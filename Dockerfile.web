@@ -1,4 +1,4 @@
-# 前端 Dockerfile
+# Web 服务 Dockerfile
 # 构建阶段
 FROM node:18-alpine AS builder
 
@@ -30,7 +30,7 @@ COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # 设置环境变量默认值（运行时使用，用于 nginx 配置）
 # 这些值可以通过 docker-compose.yml 或 docker run -e 覆盖
-ENV BACKEND_HOST=backend
+ENV BACKEND_HOST=api
 ENV BACKEND_PORT=8000
 
 # 暴露端口
