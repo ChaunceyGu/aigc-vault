@@ -7,10 +7,19 @@ on:
       - master
     tags:
       - 'v*'
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+      - 'README.md'
   pull_request:
     branches:
       - main
       - master
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
   workflow_dispatch:
 
 env:
@@ -42,9 +51,9 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-            type=sha,format=short,prefix={{branch}}-
-            type=ref,event=branch
-            type=ref,event=pr
+            type=sha,format=short,prefix=sha-,enable=${{ github.ref_type == 'branch' || github.ref_type == 'tag' }}
+            type=ref,event=branch,enable=${{ github.ref_type == 'branch' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+            type=ref,event=pr,enable=${{ github.event_name == 'pull_request' }}
 
       - name: Extract metadata for Web
         id: meta-web
@@ -56,9 +65,9 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-            type=sha,format=short,prefix={{branch}}-
-            type=ref,event=branch
-            type=ref,event=pr
+            type=sha,format=short,prefix=sha-,enable=${{ github.ref_type == 'branch' || github.ref_type == 'tag' }}
+            type=ref,event=branch,enable=${{ github.ref_type == 'branch' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+            type=ref,event=pr,enable=${{ github.event_name == 'pull_request' }}
 
       - name: Get version info
         id: version
