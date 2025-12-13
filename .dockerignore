@@ -79,3 +79,30 @@ tests/
 *.egg
 *.whl
 
+# GitHub
+.github/
+
+# CI/CD
+*.yml
+!docker-compose.yml
+
+# Development files
+*.sh
+!backend/start.sh
+!frontend/start.sh
+Makefile
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Misc
+.DS_Store
+Thumbs.db
+

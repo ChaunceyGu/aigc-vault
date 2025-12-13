@@ -26,8 +26,59 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
-  build-and-push:
+  # 代码质量检查
+  code-quality:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Run TypeScript type check
+        working-directory: ./frontend
+        run: npx tsc --noEmit
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 black
+
+      - name: Run Python lint (flake8)
+        working-directory: ./backend
+        run: |
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
+          flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+  # 构建和推送镜像
+  build-and-push:
+    needs: code-quality
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, web]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,20 +92,11 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Extract metadata for API
-        id: meta-api
+      - name: Extract metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_USERNAME }}/aigc-vault-api
-          tags: |
-            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref_type == 'tag' }}
-
-      - name: Extract metadata for Web
-        id: meta-web
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_USERNAME }}/aigc-vault-web
+          images: ${{ env.DOCKER_USERNAME }}/aigc-vault-${{ matrix.service }}
           tags: |
             type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref_type == 'tag' }}
@@ -73,14 +115,15 @@ jobs:
           echo "git_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           echo "build_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
 
-      - name: Build and push API image
+      - name: Build image (for scanning)
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.api
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
+          file: ./Dockerfile.${{ matrix.service }}
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             GIT_COMMIT=${{ steps.version.outputs.git_commit }}
@@ -88,20 +131,30 @@ jobs:
             BUILD_TIME=${{ steps.version.outputs.build_time }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          load: true
 
-      - name: Build and push Web image
-        uses: docker/build-push-action@v5
+      - name: Run Trivy vulnerability scanner
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@master
         with:
-          context: .
-          file: ./Dockerfile.web
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
-          build-args: |
-            VERSION=${{ steps.version.outputs.version }}
-            GIT_COMMIT=${{ steps.version.outputs.git_commit }}
-            GIT_TAG=${{ steps.version.outputs.git_tag }}
-            BUILD_TIME=${{ steps.version.outputs.build_time }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          image-ref: ${{ env.DOCKER_USERNAME }}/aigc-vault-${{ matrix.service }}:latest
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.service }}.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          fail-on: 'CRITICAL'
 
+      - name: Push image to Docker Hub
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ steps.meta.outputs.tags }}" | while read tag; do
+            if [ -n "$tag" ]; then
+              docker push "$tag"
+            fi
+          done
+
+      - name: Upload Trivy results to GitHub Security
+        if: always() && github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
