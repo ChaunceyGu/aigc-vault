@@ -47,13 +47,8 @@ jobs:
         with:
           images: ${{ env.DOCKER_USERNAME }}/aigc-vault-api
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-            type=sha,format=short,prefix=sha-,enable=${{ github.ref_type == 'branch' || github.ref_type == 'tag' }}
-            type=ref,event=branch,enable=${{ github.ref_type == 'branch' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
-            type=ref,event=pr,enable=${{ github.event_name == 'pull_request' }}
+            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref_type == 'tag' }}
 
       - name: Extract metadata for Web
         id: meta-web
@@ -61,13 +56,8 @@ jobs:
         with:
           images: ${{ env.DOCKER_USERNAME }}/aigc-vault-web
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-            type=sha,format=short,prefix=sha-,enable=${{ github.ref_type == 'branch' || github.ref_type == 'tag' }}
-            type=ref,event=branch,enable=${{ github.ref_type == 'branch' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
-            type=ref,event=pr,enable=${{ github.event_name == 'pull_request' }}
+            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref_type == 'tag' }}
 
       - name: Get version info
         id: version
