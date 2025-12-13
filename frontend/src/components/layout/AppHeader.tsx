@@ -1,9 +1,10 @@
-import { Layout, Button } from 'antd'
+import { Layout, Button, Tooltip } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import PasswordModal from '../PasswordModal'
 import { isPasswordVerified } from '../../utils/password'
+import { getFullVersionString, getVersionInfo } from '../../utils/version'
 
 const { Header } = Layout
 
@@ -35,7 +36,32 @@ const AppHeader = () => {
         }}
         onClick={() => navigate('/')}
       >
-        🎨 AI 绘图资产归档
+        <span>🎨 AI 绘图资产归档</span>
+        <Tooltip 
+          title={
+            <div style={{ fontSize: 12 }}>
+              <div>版本: {getFullVersionString()}</div>
+              <div style={{ marginTop: 4, opacity: 0.8 }}>
+                构建时间: {new Date(getVersionInfo().buildTime).toLocaleString('zh-CN')}
+              </div>
+            </div>
+          }
+          placement="bottomLeft"
+        >
+          <span 
+            style={{ 
+              fontSize: 12, 
+              opacity: 0.8, 
+              fontWeight: 400,
+              marginLeft: 4,
+              padding: '2px 6px',
+              background: 'rgba(255, 255, 255, 0.15)',
+              borderRadius: 4,
+            }}
+          >
+            v{getFullVersionString()}
+          </span>
+        </Tooltip>
       </div>
       {location.pathname === '/' && (
         <Button

@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
   build-and-push:
@@ -29,34 +29,50 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract metadata for API
         id: meta-api
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKERHUB_USERNAME }}/aigc-vault-api
+          images: ${{ env.DOCKER_USERNAME }}/aigc-vault-api
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+            type=sha,format=short,prefix={{branch}}-
+            type=ref,event=branch
+            type=ref,event=pr
 
       - name: Extract metadata for Web
         id: meta-web
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKERHUB_USERNAME }}/aigc-vault-web
+          images: ${{ env.DOCKER_USERNAME }}/aigc-vault-web
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+            type=sha,format=short,prefix={{branch}}-
+            type=ref,event=branch
+            type=ref,event=pr
+
+      - name: Get version info
+        id: version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION=${VERSION#v}  # 移除 v 前缀
+          else
+            VERSION="1.0.0"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "git_commit=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "git_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          echo "build_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
 
       - name: Build and push API image
         uses: docker/build-push-action@v5
@@ -66,8 +82,13 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/aigc-vault-api:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/aigc-vault-api:buildcache,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            GIT_COMMIT=${{ steps.version.outputs.git_commit }}
+            GIT_TAG=${{ steps.version.outputs.git_tag }}
+            BUILD_TIME=${{ steps.version.outputs.build_time }}
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/aigc-vault-api:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_USERNAME }}/aigc-vault-api:buildcache,mode=max
 
       - name: Build and push Web image
         uses: docker/build-push-action@v5
@@ -77,6 +98,11 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-web.outputs.tags }}
           labels: ${{ steps.meta-web.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/aigc-vault-web:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/aigc-vault-web:buildcache,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            GIT_COMMIT=${{ steps.version.outputs.git_commit }}
+            GIT_TAG=${{ steps.version.outputs.git_tag }}
+            BUILD_TIME=${{ steps.version.outputs.build_time }}
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/aigc-vault-web:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_USERNAME }}/aigc-vault-web:buildcache,mode=max
 

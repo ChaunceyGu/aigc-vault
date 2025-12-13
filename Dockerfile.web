@@ -2,6 +2,18 @@
 # 构建阶段
 FROM node:18-alpine AS builder
 
+# 构建参数
+ARG VERSION=1.0.0
+ARG GIT_COMMIT=
+ARG GIT_TAG=
+ARG BUILD_TIME=
+
+# 设置环境变量（用于 Vite 构建时注入）
+ENV VITE_APP_VERSION=${VERSION}
+ENV VITE_GIT_COMMIT=${GIT_COMMIT}
+ENV VITE_GIT_TAG=${GIT_TAG}
+ENV VITE_BUILD_TIME=${BUILD_TIME}
+
 WORKDIR /app
 
 # 复制 package 文件

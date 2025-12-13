@@ -142,8 +142,8 @@ GitHub Secrets 用于安全存储敏感信息（如 Docker Hub 密码）。
 
 | Secret 名称 | 说明 | 示例值 |
 |------------|------|--------|
-| `DOCKERHUB_USERNAME` | Docker Hub 用户名 | `your_dockerhub_username` |
-| `DOCKERHUB_TOKEN` | Docker Hub Access Token | 见下方获取方法 |
+| `DOCKER_USERNAME` | Docker Hub 用户名 | `your_dockerhub_username` |
+| `DOCKER_PASSWORD` | Docker Hub Access Token 或密码 | 见下方获取方法 |
 
 ### 3. 获取 Docker Hub Access Token
 
@@ -153,7 +153,7 @@ GitHub Secrets 用于安全存储敏感信息（如 Docker Hub 密码）。
    - **Description**: `GitHub Actions`
    - **Permissions**: 选择 `Read, Write, Delete`
 4. 点击 `Generate`
-5. **重要**：复制生成的 Token（只显示一次），这就是 `DOCKERHUB_TOKEN` 的值
+5. **重要**：复制生成的 Token（只显示一次），这就是 `DOCKER_PASSWORD` 的值
 
 ## 步骤四：创建 GitHub Actions 工作流
 
@@ -185,7 +185,7 @@ on:
       - master
 
 env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   API_IMAGE_NAME: aigc-vault-api
   WEB_IMAGE_NAME: aigc-vault-web
 
@@ -202,14 +202,14 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract metadata for API
         id: meta-api
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}
+          images: ${{ env.DOCKER_USERNAME }}/${{ env.API_IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -222,7 +222,7 @@ jobs:
         id: meta-web
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKERHUB_USERNAME }}/${{ env.WEB_IMAGE_NAME }}
+          images: ${{ env.DOCKER_USERNAME }}/${{ env.WEB_IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -239,8 +239,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ env.API_IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ env.API_IMAGE_NAME }}:buildcache,mode=max
 
       - name: Build and push Web image
         uses: docker/build-push-action@v5
@@ -250,8 +250,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-web.outputs.tags }}
           labels: ${{ steps.meta-web.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/${{ env.WEB_IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/${{ env.WEB_IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ env.WEB_IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ env.WEB_IMAGE_NAME }}:buildcache,mode=max
 ```
 
 ### 3. 简化版本（如果上面的太复杂）
@@ -269,7 +269,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
   build-and-push:
@@ -284,8 +284,8 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push API image
         uses: docker/build-push-action@v5
@@ -294,8 +294,8 @@ jobs:
           file: ./Dockerfile.api
           push: true
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/aigc-vault-api:latest
-            ${{ env.DOCKERHUB_USERNAME }}/aigc-vault-api:${{ github.sha }}
+            ${{ env.DOCKER_USERNAME }}/aigc-vault-api:latest
+            ${{ env.DOCKER_USERNAME }}/aigc-vault-api:${{ github.sha }}
 
       - name: Build and push Web image
         uses: docker/build-push-action@v5
@@ -304,8 +304,8 @@ jobs:
           file: ./Dockerfile.web
           push: true
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/aigc-vault-web:latest
-            ${{ env.DOCKERHUB_USERNAME }}/aigc-vault-web:${{ github.sha }}
+            ${{ env.DOCKER_USERNAME }}/aigc-vault-web:latest
+            ${{ env.DOCKER_USERNAME }}/aigc-vault-web:${{ github.sha }}
 ```
 
 ## 步骤五：推送代码并验证
@@ -353,19 +353,27 @@ services:
 
 ## 高级配置
 
-### 1. 使用版本标签
+### 1. 使用语义化版本（推荐）
 
-当你创建 Git 标签时，会自动构建并推送带版本号的镜像：
+工作流已配置为使用语义化版本（Semantic Versioning）。当你创建 Git 标签时，会自动构建并推送带版本号的镜像：
 
 ```bash
-# 创建标签
+# 创建语义化版本标签（推荐格式：v主版本号.次版本号.修订号）
 git tag -a v1.0.0 -m "Release version 1.0.0"
 git push origin v1.0.0
 ```
 
-这会在 Docker Hub 创建：
-- `your_username/aigc-vault-api:v1.0.0`
-- `your_username/aigc-vault-web:v1.0.0`
+这会在 Docker Hub 创建以下标签：
+- `your_username/aigc-vault-api:v1.0.0` - 完整版本号
+- `your_username/aigc-vault-api:v1.0` - 主版本.次版本
+- `your_username/aigc-vault-api:v1` - 主版本
+- `your_username/aigc-vault-api:latest` - 最新版本（如果推送到 main/master 分支）
+
+**版本号规则**：
+- `v1.0.0` - 主版本号.次版本号.修订号
+- `v1.0.1` - 修订版本（bug 修复）
+- `v1.1.0` - 次版本（新功能，向后兼容）
+- `v2.0.0` - 主版本（重大变更，可能不向后兼容）
 
 ### 2. 多架构支持（可选）
 
@@ -379,7 +387,7 @@ git push origin v1.0.0
     file: ./Dockerfile.api
     push: true
     platforms: linux/amd64,linux/arm64
-    tags: ${{ env.DOCKERHUB_USERNAME }}/aigc-vault-api:latest
+    tags: ${{ env.DOCKER_USERNAME }}/aigc-vault-api:latest
 ```
 
 ### 3. 构建缓存优化
@@ -393,7 +401,7 @@ git push origin v1.0.0
 **原因**: Docker Hub 认证失败
 
 **解决方案**:
-1. 检查 `DOCKERHUB_USERNAME` 和 `DOCKERHUB_TOKEN` 是否正确设置
+1. 检查 `DOCKER_USERNAME` 和 `DOCKER_PASSWORD` 是否正确设置
 2. 确认 Docker Hub Token 有 `Read, Write, Delete` 权限
 3. 重新生成 Token 并更新 Secret
 

@@ -12,10 +12,58 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv()
 
+# 获取版本信息
+def get_version_info():
+    """获取版本信息"""
+    import subprocess
+    import os
+    from pathlib import Path
+    
+    # 优先从环境变量获取（Docker 构建时注入）
+    version = os.getenv('APP_VERSION', '1.0.0')
+    git_commit = os.getenv('GIT_COMMIT', '')
+    git_tag = os.getenv('GIT_TAG', '')
+    build_time = os.getenv('BUILD_TIME', '')
+    
+    # 如果环境变量没有，尝试从 Git 获取
+    if not git_commit or not git_tag:
+        try:
+            repo_path = Path(__file__).parent.parent.parent
+            if not git_commit:
+                try:
+                    git_commit = subprocess.check_output(
+                        ['git', 'rev-parse', 'HEAD'],
+                        cwd=repo_path,
+                        stderr=subprocess.DEVNULL
+                    ).decode('utf-8').strip()[:7]
+                except:
+                    pass
+            
+            if not git_tag:
+                try:
+                    git_tag = subprocess.check_output(
+                        ['git', 'describe', '--tags', '--exact-match', 'HEAD'],
+                        cwd=repo_path,
+                        stderr=subprocess.DEVNULL
+                    ).decode('utf-8').strip()
+                    if git_tag and version == '1.0.0':
+                        version = git_tag.replace('v', '')
+                except:
+                    pass
+        except:
+            pass
+    
+    return {
+        'version': version,
+        'git_commit': git_commit,
+        'git_tag': git_tag,
+        'build_time': build_time
+    }
+
 app = FastAPI(
     title="AIGC Asset Vault API",
     description="AI 绘图资产归档系统后端 API",
-    version="1.0.0"
+    version=get_version_info()['version']
 )
 
 # 配置 CORS
@@ -91,10 +139,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.get("/")
 async def root():
     """健康检查"""
+    version_info = get_version_info()
     return JSONResponse({
         "status": "ok",
         "message": "AIGC Asset Vault API is running",
-        "version": "1.0.0"
+        "version": version_info['version']
     })
 
 @app.get("/api/health")
