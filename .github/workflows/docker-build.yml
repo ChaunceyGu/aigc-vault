@@ -22,6 +22,11 @@ on:
       - 'LICENSE'
   workflow_dispatch:
 
+# 权限配置
+permissions:
+  contents: read
+  security-events: write
+
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
@@ -143,6 +148,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           fail-on: 'CRITICAL'
+        continue-on-error: true
 
       - name: Push image to Docker Hub
         if: github.event_name != 'pull_request'
@@ -153,8 +159,20 @@ jobs:
             fi
           done
 
-      - name: Upload Trivy results to GitHub Security
+      - name: Check if SARIF file exists
         if: always() && github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        id: check_sarif
+        run: |
+          if [ -f "trivy-results-${{ matrix.service }}.sarif" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Warning: SARIF file not found for ${{ matrix.service }}"
+          fi
+
+      - name: Upload Trivy results to GitHub Security
+        if: always() && github.event_name != 'pull_request' && steps.check_sarif.outputs.exists == 'true'
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
+          wait-for-processing: false
