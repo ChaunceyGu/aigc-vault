@@ -9,7 +9,6 @@ import {
   Tag,
   Space,
   Button,
-  Image,
   Spin,
   message,
   Row,
@@ -22,7 +21,6 @@ import {
 import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined, DownloadOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { getLogDetail, deleteLog, type LogDetail } from '../services/logs'
 import NSFWImage from '../components/NSFWImage'
-import PasswordModal from '../components/PasswordModal'
 import { isPasswordVerified } from '../utils/password'
 
 const { Title, Text } = Typography
@@ -36,14 +34,13 @@ const LogDetailPage: React.FC = () => {
   const [previewImage, setPreviewImage] = useState('')
   const [previewIndex, setPreviewIndex] = useState(0)
   const [previewImages, setPreviewImages] = useState<string[]>([])
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
   const [showNsfw, setShowNsfw] = useState(false)  // 控制NSFW内容显示
 
   useEffect(() => {
     if (id) {
       loadDetail()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   // ESC 键关闭预览，左右箭头切换图片
@@ -88,9 +85,9 @@ const LogDetailPage: React.FC = () => {
         input_assets: data.input_assets,
       })
       setLog(data)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载详情失败:', error)
-      const errorMessage = error?.message || '加载详情失败'
+      const errorMessage = (error as Error)?.message || '加载详情失败'
       message.error({
         content: errorMessage,
         duration: 3,
@@ -261,9 +258,10 @@ const LogDetailPage: React.FC = () => {
       window.URL.revokeObjectURL(downloadUrl)
 
       message.success(`成功打包 ${allAssets.length} 张图片为 ZIP 文件`)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('批量下载失败:', error)
-      if (error.message && error.message.includes('jszip')) {
+      const errorMessage = (error as Error)?.message || ''
+      if (errorMessage.includes('jszip')) {
         message.error('需要安装 jszip 库，请运行: npm install jszip')
       } else {
         message.error('批量下载失败，请重试')
@@ -315,9 +313,9 @@ const LogDetailPage: React.FC = () => {
       // 设置刷新标志，返回首页时自动刷新
       sessionStorage.setItem('refreshHomePage', 'true')
       navigate('/')
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('删除失败:', error)
-      const errorMessage = error?.message || '删除失败，请重试'
+      const errorMessage = (error as Error)?.message || '删除失败，请重试'
       message.error({
         content: errorMessage,
         duration: 3,

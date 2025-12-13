@@ -21,7 +21,6 @@ import PasswordModal from '../components/PasswordModal'
 import { createLog } from '../services/logs'
 import { getTools, getModels } from '../services/tags'
 import { getRecentTools, saveRecentTool, getRecentModels, saveRecentModel } from '../utils/storage'
-import { isPasswordVerified } from '../utils/password'
 
 const { TextArea } = Input
 
@@ -98,7 +97,11 @@ const CreateLogPage: React.FC = () => {
   }
 
   // 提交表单
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    title: string
+    prompt?: string
+    paramsNote?: string
+  }) => {
     // 验证每个输出组都有输出图片
     for (let i = 0; i < outputGroups.length; i++) {
       const group = outputGroups[i]
@@ -150,9 +153,9 @@ const CreateLogPage: React.FC = () => {
       // 设置刷新标志，返回首页时自动刷新
       sessionStorage.setItem('refreshHomePage', 'true')
       navigate('/')
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('创建失败:', error)
-      const errorMessage = error?.message || '创建失败，请检查输入信息后重试'
+      const errorMessage = (error as Error)?.message || '创建失败，请检查输入信息后重试'
       message.error({
         content: errorMessage,
         duration: 4,

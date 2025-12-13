@@ -110,6 +110,7 @@ const HomePage: React.FC = () => {
       loadLogs()
       loadTagStats()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, search, logType, selectedTool, selectedModel, sortBy])
 
   // 搜索快捷键：按 / 键聚焦搜索框
@@ -160,7 +161,7 @@ const HomePage: React.FC = () => {
         model: selectedModel,
       })
       // 应用排序
-      let sortedItems = [...response.items]
+      const sortedItems = [...response.items]
       switch (sortBy) {
         case 'time_desc':
           sortedItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -181,9 +182,9 @@ const HomePage: React.FC = () => {
       
       // 缓存结果（1分钟）
       cache.set(cacheKey, { items: sortedItems, total: response.total }, 60 * 1000)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载列表失败:', error)
-      const errorMessage = error?.message || '加载列表失败，请刷新页面重试'
+      const errorMessage = (error as Error)?.message || '加载列表失败，请刷新页面重试'
       message.error({
         content: errorMessage,
         duration: 4,
@@ -212,7 +213,7 @@ const HomePage: React.FC = () => {
       const stats = await getTagStats()
       setTagStats(stats)
       cache.set(cacheKey, stats, 5 * 60 * 1000)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载标签统计失败:', error)
       // 标签统计失败不影响主功能，静默失败即可
     }
@@ -259,25 +260,6 @@ const HomePage: React.FC = () => {
     })
   }, [logs])
 
-  // 下载图片
-  const downloadImage = async (url: string, filename: string) => {
-    try {
-      const response = await fetch(url)
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-      message.success('下载成功')
-    } catch (error) {
-      console.error('下载失败:', error)
-      message.error('下载失败，请重试')
-    }
-  }
 
   // 批量下载选中记录的图片（压缩为 ZIP）
   const handleBatchDownload = async () => {
@@ -341,9 +323,10 @@ const HomePage: React.FC = () => {
       window.URL.revokeObjectURL(downloadUrl)
 
       message.success(`成功打包 ${downloadCount} 张图片为 ZIP 文件`)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('批量下载失败:', error)
-      if (error.message && error.message.includes('jszip')) {
+      const errorMessage = (error as Error)?.message || ''
+      if (errorMessage.includes('jszip')) {
         message.error('需要安装 jszip 库，请运行: npm install jszip')
       } else {
         message.error('批量下载失败，请重试')
@@ -365,8 +348,9 @@ const HomePage: React.FC = () => {
       setSelectionMode(false)
       loadLogs(true) // 强制刷新，清除缓存
       loadTagStats(true) // 强制刷新标签统计
-    } catch (error: any) {
-      message.error('批量删除失败：' + (error?.message || '未知错误'))
+    } catch (error: unknown) {
+      const errorMessage = (error as Error)?.message || '未知错误'
+      message.error('批量删除失败：' + errorMessage)
     }
   }
 

@@ -8,7 +8,7 @@ interface CacheItem<T> {
 }
 
 class SimpleCache {
-  private cache = new Map<string, CacheItem<any>>()
+  private cache = new Map<string, CacheItem<unknown>>()
 
   /**
    * 设置缓存

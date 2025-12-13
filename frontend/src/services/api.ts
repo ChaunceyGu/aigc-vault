@@ -27,7 +27,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     // 返回 response.data，这样调用方直接得到数据而不是 AxiosResponse
-    return response.data as any
+    return response.data
   },
   (error) => {
     // 统一错误处理

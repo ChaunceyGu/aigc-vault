@@ -74,6 +74,7 @@ const EditLogPage: React.FC = () => {
       loadDetail()
       loadTags()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   const loadDetail = async () => {
@@ -90,13 +91,13 @@ const EditLogPage: React.FC = () => {
       if (data.output_groups && Array.isArray(data.output_groups) && data.output_groups.length > 0) {
         // 显示所有输出组，包括旧数据（id为null的）
         // 确保每个输出组都有assets数组
-        const groupsWithAssets = data.output_groups.map((g: any) => ({
+        const groupsWithAssets = data.output_groups.map((g) => ({
           ...g,
           assets: g.assets || []  // 确保assets存在，默认为空数组
         }))
         setExistingOutputGroups(groupsWithAssets)
         console.log('加载的输出组:', groupsWithAssets, '总数:', groupsWithAssets.length)
-        groupsWithAssets.forEach((g: any, idx: number) => {
+        groupsWithAssets.forEach((g, idx: number) => {
           console.log(`输出组 ${idx + 1}:`, {
             id: g.id,
             tools: g.tools,
@@ -172,16 +173,17 @@ const EditLogPage: React.FC = () => {
       setAddingOutputGroup(false)
       // 重新加载详情
       await loadDetail()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('添加输出组失败:', error)
-      message.error(error.response?.data?.detail || '添加输出组失败，请重试')
+      const errorMessage = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '添加输出组失败，请重试'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }
   }
 
   // 开始编辑输出组
-  const startEditGroup = (group: any) => {
+  const startEditGroup = (group: { id: number | null; tools?: string[]; models?: string[] }) => {
     if (group.id === null || group.id === undefined) {
       message.warning('旧数据格式无法编辑，请添加新输出组并迁移数据')
       return
@@ -238,9 +240,10 @@ const EditLogPage: React.FC = () => {
       await loadDetail()
       // 取消编辑状态
       cancelEditGroup()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('更新输出组失败:', error)
-      message.error(error.response?.data?.detail || '更新输出组失败，请重试')
+      const errorMessage = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '更新输出组失败，请重试'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -256,16 +259,21 @@ const EditLogPage: React.FC = () => {
       message.success('输出组删除成功！')
       // 重新加载详情
       await loadDetail()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('删除输出组失败:', error)
-      message.error(error.response?.data?.detail || '删除输出组失败，请重试')
+      const errorMessage = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '删除输出组失败，请重试'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }
   }
 
   // 提交表单
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    title: string
+    prompt?: string
+    paramsNote?: string
+  }) => {
     if (!id) return
 
     // 再次检查密码验证
@@ -288,9 +296,10 @@ const EditLogPage: React.FC = () => {
       // 设置刷新标志，返回首页时自动刷新
       sessionStorage.setItem('refreshHomePage', 'true')
       navigate(`/logs/${id}`)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('更新失败:', error)
-      message.error(error.response?.data?.detail || '更新失败，请重试')
+      const errorMessage = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '更新失败，请重试'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }

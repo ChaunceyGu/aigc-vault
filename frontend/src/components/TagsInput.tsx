@@ -27,7 +27,9 @@ const TagsInput: React.FC<TagsInputProps> = ({
   const [focused, setFocused] = useState(false)
   
   // 确保value始终是数组
-  const normalizedValue = Array.isArray(value) ? value : (value ? [value] : [])
+  const normalizedValue = useMemo(() => {
+    return Array.isArray(value) ? value : (value ? [value] : [])
+  }, [value])
 
   // 更新自动补全选项
   useEffect(() => {

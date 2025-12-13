@@ -37,7 +37,7 @@ function getPackageVersion() {
 }
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(() => {
   // 优先使用环境变量（Docker 构建时注入），否则从 Git 获取
   const packageVersion = process.env.VITE_APP_VERSION || getPackageVersion()
   const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString()

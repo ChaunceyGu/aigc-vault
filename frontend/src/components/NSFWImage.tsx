@@ -14,7 +14,10 @@ interface NSFWImageProps {
     src?: string
     mask?: React.ReactNode
   }
-  [key: string]: any
+  placeholder?: React.ReactNode
+  loading?: 'lazy' | 'eager'
+  fallback?: string
+  onError?: (event: React.SyntheticEvent<HTMLImageElement, Event>) => void
 }
 
 const NSFWImage: React.FC<NSFWImageProps> = ({ 
