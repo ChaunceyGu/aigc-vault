@@ -86,8 +86,8 @@ jobs:
             GIT_COMMIT=${{ steps.version.outputs.git_commit }}
             GIT_TAG=${{ steps.version.outputs.git_tag }}
             BUILD_TIME=${{ steps.version.outputs.build_time }}
-          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/aigc-vault-api:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKER_USERNAME }}/aigc-vault-api:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push Web image
         uses: docker/build-push-action@v5
@@ -102,6 +102,6 @@ jobs:
             GIT_COMMIT=${{ steps.version.outputs.git_commit }}
             GIT_TAG=${{ steps.version.outputs.git_tag }}
             BUILD_TIME=${{ steps.version.outputs.build_time }}
-          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/aigc-vault-web:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKER_USERNAME }}/aigc-vault-web:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
