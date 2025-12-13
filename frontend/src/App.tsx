@@ -1,11 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { Layout } from 'antd'
+import { Layout, Tooltip } from 'antd'
 import AppHeader from './components/layout/AppHeader'
 import BackToTop from './components/BackToTop'
 import HomePage from './pages/HomePage'
 import CreateLogPage from './pages/CreateLogPage'
 import LogDetailPage from './pages/LogDetailPage'
 import EditLogPage from './pages/EditLogPage'
+import { getFullVersionString, getVersionInfo } from './utils/version'
 
 const { Content, Footer } = Layout
 
@@ -34,6 +35,28 @@ function App() {
         }}>
           <div style={{ color: '#666', fontSize: 14 }}>
             AI 绘图资产归档系统 ©2025
+            <Tooltip 
+              title={
+                <div style={{ fontSize: 12 }}>
+                  <div>版本: {getFullVersionString()}</div>
+                  <div style={{ marginTop: 4, opacity: 0.8 }}>
+                    构建时间: {new Date(getVersionInfo().buildTime).toLocaleString('zh-CN')}
+                  </div>
+                </div>
+              }
+              placement="top"
+            >
+              <span 
+                style={{ 
+                  marginLeft: 8,
+                  color: '#999',
+                  fontSize: 12,
+                  cursor: 'help',
+                }}
+              >
+                v{getFullVersionString()}
+              </span>
+            </Tooltip>
           </div>
         </Footer>
       </Layout>

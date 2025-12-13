@@ -711,39 +711,41 @@ const HomePage: React.FC = () => {
                           </div>
                         )}
                         
-                        {/* 悬停时的遮罩层 */}
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: 'rgba(0, 0, 0, 0.4)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            opacity: 0,
-                            transition: 'opacity 0.3s',
-                            zIndex: 5,
-                          }}
-                          className="image-hover-overlay"
-                        >
-                          <div style={{
-                            background: '#fff',
-                            color: '#1890ff',
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            fontSize: 14,
-                            fontWeight: 500,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                          }}>
-                            <EyeOutlined /> 查看详情
+                        {/* 悬停时的遮罩层（仅非NSFW图片显示） */}
+                        {!log.is_nsfw && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              background: 'rgba(0, 0, 0, 0.4)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              opacity: 0,
+                              transition: 'opacity 0.3s',
+                              zIndex: 5,
+                            }}
+                            className="image-hover-overlay"
+                          >
+                            <div style={{
+                              background: '#fff',
+                              color: '#1890ff',
+                              padding: '8px 16px',
+                              borderRadius: 6,
+                              fontSize: 14,
+                              fontWeight: 500,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                            }}>
+                              <EyeOutlined /> 查看详情
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     ) : (
                       <div style={{ 
@@ -790,6 +792,7 @@ const HomePage: React.FC = () => {
                   }}
                   bodyStyle={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}
                   className="log-card"
+                  data-nsfw={log.is_nsfw ? 'true' : 'false'}
                 >
                   {selectionMode && (
                     <div
@@ -1009,11 +1012,15 @@ const HomePage: React.FC = () => {
                     transform: translateY(-4px);
                     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
                   }
-                  .log-card:hover .image-hover-info {
+                  .log-card:hover .image-hover-overlay {
                     opacity: 1 !important;
                   }
                   .log-card:hover .ant-image img {
                     transform: scale(1.05);
+                  }
+                  /* NSFW 图片不显示悬停效果 */
+                  .log-card[data-nsfw="true"]:hover .ant-image img {
+                    transform: none;
                   }
                   @keyframes fadeIn {
                     from {
