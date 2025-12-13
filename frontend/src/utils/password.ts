@@ -12,7 +12,7 @@ const VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000 // 24小时
  */
 export async function getEditPassword(): Promise<string> {
   try {
-    const data = await api.get<{ password: string }>('/config/edit-password')
+    const data = await api.get<{ password: string }>('/config/edit-password') as unknown as { password: string }
     return data.password || ''
   } catch (error) {
     console.error('获取密码失败:', error)

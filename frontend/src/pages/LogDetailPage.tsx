@@ -21,6 +21,7 @@ import {
 import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined, DownloadOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { getLogDetail, deleteLog, type LogDetail } from '../services/logs'
 import NSFWImage from '../components/NSFWImage'
+import PasswordModal from '../components/PasswordModal'
 import { isPasswordVerified } from '../utils/password'
 
 const { Title, Text } = Typography
@@ -34,6 +35,8 @@ const LogDetailPage: React.FC = () => {
   const [previewImage, setPreviewImage] = useState('')
   const [previewIndex, setPreviewIndex] = useState(0)
   const [previewImages, setPreviewImages] = useState<string[]>([])
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
   const [showNsfw, setShowNsfw] = useState(false)  // 控制NSFW内容显示
 
   useEffect(() => {
@@ -93,7 +96,8 @@ const LogDetailPage: React.FC = () => {
         duration: 3,
       })
       // 如果是404，说明记录不存在，跳转到首页
-      if (error?.message?.includes('不存在') || error?.message?.includes('404')) {
+      const errorMsg = (error as Error)?.message || ''
+      if (errorMsg.includes('不存在') || errorMsg.includes('404')) {
         setTimeout(() => navigate('/'), 2000)
       } else {
         setTimeout(() => navigate('/'), 2000)
@@ -1021,7 +1025,21 @@ const LogDetailPage: React.FC = () => {
           </div>
         </div>
       )}
-      
+
+      <PasswordModal
+        open={showPasswordModal}
+        onSuccess={() => {
+          setShowPasswordModal(false)
+          if (pendingAction) {
+            pendingAction()
+            setPendingAction(null)
+          }
+        }}
+        onCancel={() => {
+          setShowPasswordModal(false)
+          setPendingAction(null)
+        }}
+      />
     </div>
   )
 }
