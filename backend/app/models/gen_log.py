@@ -18,9 +18,12 @@ class GenLog(Base):
     models = Column(ARRAY(Text), nullable=True)
     prompt = Column(Text, nullable=True)
     params_note = Column(Text, nullable=True)
+    comparison_group_id = Column(Integer, nullable=True, index=True)  # 对比组ID，用于关联同一主题的不同平台模型输出
+    is_nsfw = Column(String(10), nullable=True, default='false')  # NSFW标记，'true' 或 'false'
     
     # 关联关系
     assets = relationship("LogAsset", back_populates="log", cascade="all, delete-orphan")
+    output_groups = relationship("OutputGroup", back_populates="log", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<GenLog(id={self.id}, title='{self.title}', type='{self.log_type}')>"

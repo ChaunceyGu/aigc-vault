@@ -139,10 +139,11 @@ async def health_check():
     })
 
 # 导入路由模块
-from app.api import logs, assets, tags
+from app.api import logs, assets, tags, config
 app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
 app.include_router(assets.router, prefix="/api/assets", tags=["assets"])
 app.include_router(tags.router, prefix="/api/tags", tags=["tags"])
+app.include_router(config.router, prefix="/api/config", tags=["config"])
 
 if __name__ == "__main__":
     import uvicorn

@@ -6,7 +6,7 @@ help: ## 显示帮助信息
 
 dev-backend: ## 启动后端开发服务器
 	@echo "启动后端服务..."
-	@cd backend && if exist venv\Scripts\activate.bat (call venv\Scripts\activate.bat && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000) else (python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000)
+	@cd backend && ./start.sh
 
 dev-frontend: ## 启动前端开发服务器
 	@echo "启动前端服务..."

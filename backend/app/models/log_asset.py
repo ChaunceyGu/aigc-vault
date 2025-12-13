@@ -16,10 +16,12 @@ class LogAsset(Base):
     asset_type = Column(String(20), nullable=False, index=True)  # 'input' or 'output'
     note = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0, nullable=False)
+    output_group_id = Column(Integer, ForeignKey("log_output_groups.id", ondelete="SET NULL"), nullable=True, index=True)  # 输出组ID（仅output类型有效）
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     
     # 关联关系
     log = relationship("GenLog", back_populates="assets")
+    output_group = relationship("OutputGroup", back_populates="assets")
     
     def __repr__(self):
         return f"<LogAsset(id={self.id}, log_id={self.log_id}, type='{self.asset_type}')>"

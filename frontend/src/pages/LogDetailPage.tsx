@@ -19,8 +19,11 @@ import {
   Badge,
   Popconfirm,
 } from 'antd'
-import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined, DownloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined, DownloadOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { getLogDetail, deleteLog, type LogDetail } from '../services/logs'
+import NSFWImage from '../components/NSFWImage'
+import PasswordModal from '../components/PasswordModal'
+import { isPasswordVerified } from '../utils/password'
 
 const { Title, Text } = Typography
 
@@ -33,6 +36,9 @@ const LogDetailPage: React.FC = () => {
   const [previewImage, setPreviewImage] = useState('')
   const [previewIndex, setPreviewIndex] = useState(0)
   const [previewImages, setPreviewImages] = useState<string[]>([])
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
+  const [showNsfw, setShowNsfw] = useState(false)  // 控制NSFW内容显示
 
   useEffect(() => {
     if (id) {
@@ -67,18 +73,18 @@ const LogDetailPage: React.FC = () => {
     setLoading(true)
     try {
       const data = await getLogDetail(Number(id))
-      // 确保 input_assets 和 output_assets 是数组
+      // 确保 input_assets 和 output_groups 是数组
       if (!data.input_assets) {
         data.input_assets = []
       }
-      if (!data.output_assets) {
-        data.output_assets = []
+      if (!data.output_groups) {
+        data.output_groups = []
       }
       console.log('加载的记录详情:', {
         id: data.id,
         log_type: data.log_type,
         input_assets_count: data.input_assets?.length || 0,
-        output_assets_count: data.output_assets?.length || 0,
+        output_assets_count: data.output_groups?.reduce((sum, group) => sum + group.assets.length, 0) || 0,
         input_assets: data.input_assets,
       })
       setLog(data)
@@ -143,19 +149,33 @@ const LogDetailPage: React.FC = () => {
     }
   }
 
-  // 下载图片
-  const downloadImage = async (url: string, filename: string) => {
+  // 下载图片（优先使用file_key获取原始图片）
+  const downloadImage = async (url: string, filename: string, fileKey?: string) => {
     try {
-      const response = await fetch(url)
+      // 如果有file_key，尝试从后端API获取原始图片URL
+      let downloadUrl = url
+      if (fileKey) {
+        try {
+          const response = await fetch(`/api/assets/${encodeURIComponent(fileKey)}/url`)
+          if (response.ok) {
+            const data = await response.json()
+            downloadUrl = data.url || url
+          }
+        } catch (error) {
+          console.warn(`获取原始图片URL失败，使用默认URL: ${error}`)
+        }
+      }
+      
+      const response = await fetch(downloadUrl)
       const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
+      const downloadUrlObj = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href = downloadUrl
+      link.href = downloadUrlObj
       link.download = filename
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
+      window.URL.revokeObjectURL(downloadUrlObj)
       message.success('下载成功')
     } catch (error) {
       console.error('下载失败:', error)
@@ -163,24 +183,92 @@ const LogDetailPage: React.FC = () => {
     }
   }
 
-  // 批量下载所有输出图片
+  // 批量下载所有输出图片（压缩为 ZIP）
   const handleDownloadAll = async () => {
-    if (!log || !log.output_assets || log.output_assets.length === 0) {
+    if (!log || !log.output_groups || log.output_groups.length === 0) {
       message.warning('没有可下载的图片')
       return
     }
 
-    for (let i = 0; i < log.output_assets.length; i++) {
-      const asset = log.output_assets[i]
-      const filename = asset.note 
-        ? `${log.title}_${asset.note}_${i + 1}.jpg`
-        : `${log.title}_${i + 1}.jpg`
-      await downloadImage(asset.url, filename)
-      // 避免下载过快导致浏览器阻止
-      await new Promise(resolve => setTimeout(resolve, 200))
+    // 收集所有输出组的图片（使用file_key获取原始图片URL）
+    const allAssets: Array<{ url: string; filename: string; file_key?: string }> = []
+    log.output_groups.forEach((group, groupIndex) => {
+      if (group.assets && group.assets.length > 0) {
+        group.assets.forEach((asset, assetIndex) => {
+          const filename = `${log.title}_组${groupIndex + 1}_${assetIndex + 1}.jpg`.replace(/[<>:"/\\|?*]/g, '_')
+          allAssets.push({ 
+            url: asset.url, 
+            filename,
+            file_key: asset.file_key  // 保存file_key用于获取原始图片
+          })
+        })
+      }
+    })
+
+    if (allAssets.length === 0) {
+      message.warning('没有可下载的图片')
+      return
     }
 
-    message.success(`成功下载 ${log.output_assets.length} 张图片`)
+    try {
+      // 动态导入 JSZip
+      const JSZip = (await import('jszip')).default
+      const zip = new JSZip()
+      const loadingMessage = message.loading('正在准备下载文件...', 0)
+
+      // 下载所有图片到 ZIP（使用file_key获取原始图片，如果没有file_key则使用url）
+      for (let i = 0; i < allAssets.length; i++) {
+        try {
+          const asset = allAssets[i]
+          // 如果有file_key，使用API获取原始图片URL
+          let downloadUrl = asset.url
+          if (asset.file_key) {
+            try {
+              // 从后端API获取原始图片URL
+              const response = await fetch(`/api/assets/${encodeURIComponent(asset.file_key)}/url`)
+              if (response.ok) {
+                const data = await response.json()
+                downloadUrl = data.url || asset.url
+              }
+            } catch (error) {
+              console.warn(`获取原始图片URL失败，使用默认URL: ${error}`)
+            }
+          }
+          const response = await fetch(downloadUrl)
+          const blob = await response.blob()
+          zip.file(asset.filename, blob)
+        } catch (error) {
+          console.error(`下载图片失败: ${allAssets[i].filename}`, error)
+        }
+      }
+
+      loadingMessage()
+      const generatingMessage = message.loading('正在生成压缩包...', 0)
+
+      // 生成 ZIP 文件
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      generatingMessage()
+
+      // 下载 ZIP 文件
+      const downloadUrl = window.URL.createObjectURL(zipBlob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      const safeTitle = log.title.replace(/[<>:"/\\|?*]/g, '_')
+      link.download = `${safeTitle}_${allAssets.length}张图片.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
+
+      message.success(`成功打包 ${allAssets.length} 张图片为 ZIP 文件`)
+    } catch (error: any) {
+      console.error('批量下载失败:', error)
+      if (error.message && error.message.includes('jszip')) {
+        message.error('需要安装 jszip 库，请运行: npm install jszip')
+      } else {
+        message.error('批量下载失败，请重试')
+      }
+    }
   }
 
   if (loading) {
@@ -200,13 +288,13 @@ const LogDetailPage: React.FC = () => {
         margin: '0 auto',
       }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>😕</div>
-        <div style={{ fontSize: 18, color: '#666', marginBottom: 8 }}>记录不存在</div>
+        <div style={{ fontSize: 18, color: '#666', marginBottom: 8 }}>记录不存在或已被删除</div>
         <Button 
           type="primary" 
           onClick={() => navigate('/')}
           style={{ marginTop: 16 }}
         >
-          返回首页
+          返回图库
         </Button>
       </div>
     )
@@ -256,9 +344,31 @@ const LogDetailPage: React.FC = () => {
           返回图库
         </Button>
         <Space size="middle">
+          {log.is_nsfw && (
+            <Button
+              icon={showNsfw ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+              onClick={() => setShowNsfw(!showNsfw)}
+              size="large"
+              style={{ 
+                borderRadius: 8,
+                background: showNsfw ? 'rgba(255, 77, 79, 0.1)' : 'rgba(24, 144, 255, 0.1)',
+                borderColor: showNsfw ? '#ff4d4f' : '#1890ff',
+                color: showNsfw ? '#ff4d4f' : '#1890ff',
+              }}
+            >
+              {showNsfw ? '隐藏NSFW内容' : '显示NSFW内容'}
+            </Button>
+          )}
           <Button
             icon={<EditOutlined />}
-            onClick={() => navigate(`/logs/${id}/edit`)}
+            onClick={() => {
+              if (isPasswordVerified()) {
+                navigate(`/logs/${id}/edit`)
+              } else {
+                setPendingAction(() => () => navigate(`/logs/${id}/edit`))
+                setShowPasswordModal(true)
+              }
+            }}
             size="large"
             type="primary"
             style={{ borderRadius: 8 }}
@@ -267,9 +377,9 @@ const LogDetailPage: React.FC = () => {
           </Button>
           <Popconfirm
             title="确定要删除这条记录吗？"
-            description="删除后将无法恢复，所有关联的图片文件也会被删除。"
+            description="此操作不可撤销，所有关联的图片文件也会被永久删除。"
             onConfirm={handleDelete}
-            okText="确定"
+            okText="确定删除"
             cancelText="取消"
             okButtonProps={{ danger: true }}
           >
@@ -329,55 +439,7 @@ const LogDetailPage: React.FC = () => {
               
               <Divider style={{ margin: '20px 0', borderColor: '#e8e8e8' }} />
 
-              {log.tools.length > 0 && (
-                <div>
-                  <Text strong style={{ fontSize: 15, color: '#595959', display: 'block', marginBottom: 12 }}>🛠️ 工具</Text>
-                  <div>
-                    <Space size={[8, 8]} wrap>
-                      {log.tools.map(tool => (
-                        <Tag 
-                          key={tool}
-                          style={{ 
-                            fontSize: 13, 
-                            padding: '4px 12px',
-                            borderRadius: 6,
-                            border: 'none',
-                            background: '#f0f0f0',
-                            color: '#595959',
-                          }}
-                        >
-                          {tool}
-                        </Tag>
-                      ))}
-                    </Space>
-                  </div>
-                </div>
-              )}
-
-              {log.models.length > 0 && (
-                <div>
-                  <Text strong style={{ fontSize: 15, color: '#595959', display: 'block', marginBottom: 12 }}>🤖 模型</Text>
-                  <div>
-                    <Space size={[8, 8]} wrap>
-                      {log.models.map(model => (
-                        <Tag 
-                          key={model} 
-                          color="purple"
-                          style={{ 
-                            fontSize: 13, 
-                            padding: '4px 12px',
-                            borderRadius: 6,
-                            border: 'none',
-                            fontWeight: 500,
-                          }}
-                        >
-                          {model}
-                        </Tag>
-                      ))}
-                    </Space>
-                  </div>
-                </div>
-              )}
+              {/* 工具和模型现在在输出组中显示，这里不再显示 */}
 
               <div>
                 <div style={{ 
@@ -421,7 +483,7 @@ const LogDetailPage: React.FC = () => {
                     fontStyle: log.prompt && log.prompt.trim() ? 'normal' : 'italic',
                   }}
                 >
-                  {log.prompt && log.prompt.trim() ? log.prompt : '（未填写）'}
+                  {log.prompt && log.prompt.trim() ? log.prompt : '（未填写提示词）'}
                 </div>
               </div>
 
@@ -466,7 +528,7 @@ const LogDetailPage: React.FC = () => {
                     fontStyle: log.params_note && log.params_note.trim() ? 'normal' : 'italic',
                   }}
                 >
-                  {log.params_note && log.params_note.trim() ? log.params_note : '（未填写）'}
+                  {log.params_note && log.params_note.trim() ? log.params_note : '（未填写生成参数）'}
                 </div>
               </div>
 
@@ -501,7 +563,7 @@ const LogDetailPage: React.FC = () => {
               <Card 
                 title={
                   <div style={{ fontSize: 18, fontWeight: 600, color: '#262626', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>📥 原始参考</span>
+                    <span>📥 参考图片（输入图片）</span>
                     {log.input_assets && log.input_assets.length > 0 && (
                       <Badge 
                         count={log.input_assets.length} 
@@ -564,9 +626,10 @@ const LogDetailPage: React.FC = () => {
                               e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)'
                             }}
                           >
-                            <Image
+                            <NSFWImage
                               src={asset.url}
                               alt={asset.note || '输入图片'}
+                              isNSFW={log.is_nsfw && !showNsfw}
                               style={{ 
                                 width: '100%', 
                                 height: '100%', 
@@ -632,7 +695,7 @@ const LogDetailPage: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span>🎨 生成样张</span>
                     <Badge 
-                      count={log.output_assets.length} 
+                      count={log.output_groups?.reduce((sum, group) => sum + group.assets.length, 0) || 0} 
                       style={{ 
                         marginLeft: 0,
                         backgroundColor: '#1890ff',
@@ -641,13 +704,13 @@ const LogDetailPage: React.FC = () => {
                       overflowCount={99}
                     />
                   </div>
-                  {log.output_assets.length > 0 && (
+                  {log.output_groups && log.output_groups.length > 0 && log.output_groups.some(g => g.assets.length > 0) && (
                     <Button
                       icon={<DownloadOutlined />}
                       onClick={handleDownloadAll}
                       size="small"
                     >
-                      下载全部 ({log.output_assets.length})
+                      下载全部 ({log.output_groups.reduce((sum, group) => sum + group.assets.length, 0)})
                     </Button>
                   )}
                 </div>
@@ -659,105 +722,151 @@ const LogDetailPage: React.FC = () => {
               }}
               bodyStyle={{ padding: '24px' }}
             >
-              <Row gutter={[16, 16]}>
-                {log.output_assets.map((asset, index) => (
-                  <Col 
-                    key={asset.id} 
-                    xs={12} 
-                    sm={8} 
-                    md={6}
-                    lg={8}
-                    style={{
-                      animation: `fadeIn 0.3s ease-out ${index * 0.05}s both`,
-                    }}
-                  >
-                    <div
-                      style={{
-                        aspectRatio: '1',
-                        overflow: 'hidden',
-                        borderRadius: 10,
-                        background: '#f0f0f0',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        border: '2px solid transparent',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                      }}
-                      onClick={() => handleImageClick(
-                        asset.url,
-                        log.output_assets.map(a => a.url),
-                        index
+              {log.output_groups && log.output_groups.length > 0 ? (
+                log.output_groups.map((group, groupIndex) => {
+                  // 收集所有图片用于预览
+                  const allImages = log.output_groups!.flatMap(g => g.assets.map(a => a.url))
+                  let globalIndex = 0
+                  log.output_groups!.slice(0, groupIndex).forEach(g => {
+                    globalIndex += g.assets.length
+                  })
+
+                  return (
+                    <div key={group.id || groupIndex} style={{ marginBottom: groupIndex < log.output_groups!.length - 1 ? 32 : 0 }}>
+                      {/* 输出组标题 */}
+                      {(group.tools.length > 0 || group.models.length > 0) && (
+                        <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                          <Space size="middle" wrap>
+                            {group.tools.length > 0 && (
+                              <Space size="small">
+                                <span style={{ color: '#666', fontSize: 13 }}>工具:</span>
+                                {group.tools.map(tool => (
+                                  <Tag key={tool} style={{ margin: 0 }}>{tool}</Tag>
+                                ))}
+                              </Space>
+                            )}
+                            {group.models.length > 0 && (
+                              <Space size="small">
+                                <span style={{ color: '#666', fontSize: 13 }}>模型:</span>
+                                {group.models.map(model => (
+                                  <Tag key={model} color="purple" style={{ margin: 0 }}>{model}</Tag>
+                                ))}
+                              </Space>
+                            )}
+                          </Space>
+                        </div>
                       )}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = '#1890ff'
-                        e.currentTarget.style.transform = 'scale(1.03)'
-                        e.currentTarget.style.boxShadow = '0 8px 24px rgba(24, 144, 255, 0.3)'
-                        const downloadBtn = e.currentTarget.querySelector('.image-download-btn') as HTMLElement
-                        if (downloadBtn) downloadBtn.style.opacity = '1'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'transparent'
-                        e.currentTarget.style.transform = 'scale(1)'
-                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)'
-                        const downloadBtn = e.currentTarget.querySelector('.image-download-btn') as HTMLElement
-                        if (downloadBtn) downloadBtn.style.opacity = '0'
-                      }}
-                    >
-                      <Image
-                        src={asset.url}
-                        alt="生成结果"
-                        style={{ 
-                          width: '100%', 
-                          height: '100%', 
-                          objectFit: 'cover',
-                          transition: 'transform 0.3s',
-                        }}
-                        preview={false}
-                        placeholder={
-                          <div className="image-wrapper" style={{ 
-                            width: '100%', 
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                            <Spin size="small" />
-                          </div>
-                        }
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 8,
-                          right: 8,
-                          opacity: 0,
-                          transition: 'opacity 0.3s',
-                          zIndex: 10,
-                        }}
-                        className="image-download-btn"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          const filename = asset.note 
-                            ? `${log.title}_${asset.note}_${index + 1}.jpg`
-                            : `${log.title}_${index + 1}.jpg`
-                          downloadImage(asset.url, filename)
-                        }}
-                      >
-                        <Button
-                          type="primary"
-                          shape="circle"
-                          icon={<DownloadOutlined />}
-                          size="small"
-                          style={{
-                            background: 'rgba(24, 144, 255, 0.9)',
-                            border: 'none',
-                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                          }}
-                        />
-                      </div>
+                      
+                      <Row gutter={[16, 16]}>
+                        {group.assets.map((asset, assetIndex) => {
+                          const currentGlobalIndex = globalIndex + assetIndex
+                          return (
+                            <Col 
+                              key={asset.id} 
+                              xs={12} 
+                              sm={8} 
+                              md={6}
+                              lg={8}
+                              style={{
+                                animation: `fadeIn 0.3s ease-out ${currentGlobalIndex * 0.05}s both`,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  aspectRatio: '1',
+                                  overflow: 'hidden',
+                                  borderRadius: 10,
+                                  background: '#f0f0f0',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                  border: '2px solid transparent',
+                                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                                  position: 'relative',
+                                }}
+                                onClick={() => handleImageClick(
+                                  asset.url,
+                                  allImages,
+                                  currentGlobalIndex
+                                )}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = '#1890ff'
+                                  e.currentTarget.style.transform = 'scale(1.03)'
+                                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(24, 144, 255, 0.3)'
+                                  const downloadBtn = e.currentTarget.querySelector('.image-download-btn') as HTMLElement
+                                  if (downloadBtn) downloadBtn.style.opacity = '1'
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = 'transparent'
+                                  e.currentTarget.style.transform = 'scale(1)'
+                                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)'
+                                  const downloadBtn = e.currentTarget.querySelector('.image-download-btn') as HTMLElement
+                                  if (downloadBtn) downloadBtn.style.opacity = '0'
+                                }}
+                              >
+                                <NSFWImage
+                                  src={asset.url}
+                                  alt="生成结果"
+                                  isNSFW={log.is_nsfw && !showNsfw}
+                                  style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'cover',
+                                    transition: 'transform 0.3s',
+                                  }}
+                                  preview={false}
+                                  placeholder={
+                                    <div className="image-wrapper" style={{ 
+                                      width: '100%', 
+                                      height: '100%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}>
+                                      <Spin size="small" />
+                                    </div>
+                                  }
+                                />
+                                <div
+                                  className="image-download-btn"
+                                  style={{
+                                    position: 'absolute',
+                                    top: 8,
+                                    right: 8,
+                                    opacity: 0,
+                                    transition: 'opacity 0.3s',
+                                    zIndex: 10,
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    const filename = `${log.title}_${groupIndex + 1}_${assetIndex + 1}.jpg`
+                                    downloadImage(asset.url, filename, asset.file_key)
+                                  }}
+                                >
+                                  <Button
+                                    type="primary"
+                                    shape="circle"
+                                    icon={<DownloadOutlined />}
+                                    size="small"
+                                    style={{
+                                      background: 'rgba(24, 144, 255, 0.9)',
+                                      border: 'none',
+                                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </Col>
+                          )
+                        })}
+                      </Row>
                     </div>
-                  </Col>
-                ))}
-              </Row>
+                  )
+                })
+              ) : (
+                <div style={{ textAlign: 'center', padding: '48px', color: '#999' }}>
+                  暂无生成结果
+                </div>
+              )}
             </Card>
           </Space>
         </Col>
@@ -794,11 +903,15 @@ const LogDetailPage: React.FC = () => {
               justifyContent: 'center',
               animation: 'fadeIn 0.3s ease-out',
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              // 阻止冒泡，防止点击图片区域关闭弹窗
+              e.stopPropagation()
+            }}
           >
             {/* 图片 */}
-            <Image
+            <NSFWImage
               src={previewImage}
+              isNSFW={log?.is_nsfw && !showNsfw}
               style={{ 
                 maxWidth: '90vw', 
                 maxHeight: '90vh',

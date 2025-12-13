@@ -3,7 +3,7 @@
 """
 import os
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 class Settings(BaseSettings):
     """应用配置类"""
@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # 缩略图配置
     THUMBNAIL_SIZE: int = int(os.getenv("THUMBNAIL_SIZE", "300"))
     THUMBNAIL_QUALITY: int = int(os.getenv("THUMBNAIL_QUALITY", "85"))
+    
+    # 编辑密码配置（可选）
+    EDIT_PASSWORD: Optional[str] = os.getenv("EDIT_PASSWORD", None)
     
     class Config:
         env_file = ".env"

@@ -1,12 +1,11 @@
 /**
  * 图库列表页面（首页）
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Input,
   Card,
-  Image,
   Tag,
   Space,
   Empty,
@@ -19,7 +18,6 @@ import {
   message,
   Skeleton,
   Tooltip,
-  Checkbox,
   Popconfirm,
 } from 'antd'
 import { SearchOutlined, ReloadOutlined, EyeOutlined, PictureOutlined, CheckSquareOutlined, DeleteOutlined, SortAscendingOutlined, AppstoreOutlined, UnorderedListOutlined, DownloadOutlined } from '@ant-design/icons'
@@ -27,6 +25,7 @@ import { getLogList, deleteLog, type LogItem } from '../services/logs'
 import { getTagStats } from '../services/tags'
 import type { TagStats } from '../services/tags'
 import { cache } from '../utils/cache'
+import NSFWImage from '../components/NSFWImage'
 
 // Search 组件已移除，改用 Space.Compact
 
@@ -57,6 +56,39 @@ const HomePage: React.FC = () => {
     const savedViewMode = sessionStorage.getItem('viewMode') as 'grid' | 'waterfall' | null
     return savedViewMode || 'grid'
   })
+  
+  // 瀑布流列数
+  const [waterfallColumns, setWaterfallColumns] = useState(3)
+  
+  // 计算瀑布流列数（使用防抖优化）
+  useEffect(() => {
+    let timeoutId: number | null = null
+    
+    const calculateColumns = () => {
+      const width = window.innerWidth
+      // 增加阈值，让每列更宽，图片显示更大气
+      const maxCols = width > 1800 ? 5 : width > 1400 ? 4 : width > 1000 ? 3 : 2
+      // 确保列数不超过图片数量，但至少为1
+      const cols = Math.min(maxCols, Math.max(1, logs.length))
+      setWaterfallColumns(cols)
+    }
+    
+    const debouncedCalculateColumns = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      timeoutId = window.setTimeout(calculateColumns, 150)
+    }
+    
+    calculateColumns()
+    window.addEventListener('resize', debouncedCalculateColumns)
+    return () => {
+      window.removeEventListener('resize', debouncedCalculateColumns)
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [logs.length])
   
   // 保存视图模式到 sessionStorage
   const handleViewModeChange = (mode: 'grid' | 'waterfall') => {
@@ -191,9 +223,9 @@ const HomePage: React.FC = () => {
     setPage(1)
   }
 
-  const handleCardClick = (logId: number) => {
+  const handleCardClick = useCallback((logId: number) => {
     navigate(`/logs/${logId}`)
-  }
+  }, [navigate])
 
   const handleRefresh = () => {
     loadLogs(true) // 强制刷新
@@ -216,14 +248,16 @@ const HomePage: React.FC = () => {
     }
   }
 
-  // 全选/取消全选
-  const toggleSelectAll = () => {
-    if (selectedIds.length === logs.length) {
-      setSelectedIds([])
-    } else {
-      setSelectedIds(logs.map(log => log.id))
-    }
-  }
+  // 全选/取消全选（使用useCallback优化）
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(prev => {
+      if (prev.length === logs.length) {
+        return []
+      } else {
+        return logs.map(log => log.id)
+      }
+    })
+  }, [logs])
 
   // 下载图片
   const downloadImage = async (url: string, filename: string) => {
@@ -245,30 +279,76 @@ const HomePage: React.FC = () => {
     }
   }
 
-  // 批量下载选中记录的图片
+  // 批量下载选中记录的图片（压缩为 ZIP）
   const handleBatchDownload = async () => {
     if (selectedIds.length === 0) {
       message.warning('请先选择要下载的记录')
       return
     }
 
-    const selectedLogs = logs.filter(log => selectedIds.includes(log.id))
-    let downloadCount = 0
+    try {
+      // 动态导入 JSZip（如果未安装会提示）
+      const JSZip = (await import('jszip')).default
+      
+      const selectedLogs = logs.filter(log => selectedIds.includes(log.id))
+      const zip = new JSZip()
+      let downloadCount = 0
+      const loadingMessage = message.loading('正在准备下载文件...', 0)
 
-    for (const log of selectedLogs) {
-      if (log.preview_urls && log.preview_urls.length > 0) {
-        for (let i = 0; i < log.preview_urls.length; i++) {
-          const url = log.preview_urls[i]
-          const filename = `${log.title}_${i + 1}.jpg`
-          await downloadImage(url, filename)
-          downloadCount++
-          // 避免下载过快导致浏览器阻止
-          await new Promise(resolve => setTimeout(resolve, 200))
+      // 收集所有图片
+      for (const log of selectedLogs) {
+        if (log.preview_urls && log.preview_urls.length > 0) {
+          // 为每个记录创建文件夹
+          const folderName = log.title.replace(/[<>:"/\\|?*]/g, '_') // 清理文件名中的非法字符
+          const folder = zip.folder(folderName) || zip
+          
+          for (let i = 0; i < log.preview_urls.length; i++) {
+            try {
+              const url = log.preview_urls[i]
+              const response = await fetch(url)
+              const blob = await response.blob()
+              const filename = `${log.title}_${i + 1}.jpg`.replace(/[<>:"/\\|?*]/g, '_')
+              folder.file(filename, blob)
+              downloadCount++
+            } catch (error) {
+              console.error(`下载图片失败: ${log.title}_${i + 1}`, error)
+            }
+          }
         }
       }
-    }
 
-    message.success(`成功下载 ${downloadCount} 张图片`)
+      if (downloadCount === 0) {
+        loadingMessage()
+        message.warning('没有可下载的图片')
+        return
+      }
+
+      loadingMessage()
+      const generatingMessage = message.loading('正在生成压缩包...', 0)
+
+      // 生成 ZIP 文件
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      generatingMessage()
+
+      // 下载 ZIP 文件
+      const downloadUrl = window.URL.createObjectURL(zipBlob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = `批量下载_${selectedLogs.length}条记录_${new Date().toISOString().slice(0, 10)}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
+
+      message.success(`成功打包 ${downloadCount} 张图片为 ZIP 文件`)
+    } catch (error: any) {
+      console.error('批量下载失败:', error)
+      if (error.message && error.message.includes('jszip')) {
+        message.error('需要安装 jszip 库，请运行: npm install jszip')
+      } else {
+        message.error('批量下载失败，请重试')
+      }
+    }
   }
 
   // 批量删除
@@ -291,7 +371,7 @@ const HomePage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
+    <div style={{ maxWidth: 1800, margin: '0 auto', padding: '0 24px' }}>
       {/* 搜索和筛选栏 */}
       <Card 
         style={{ 
@@ -305,7 +385,7 @@ const HomePage: React.FC = () => {
             <Col xs={24} sm={12} md={10}>
               <Space.Compact style={{ width: '100%' }}>
                 <Input
-                  placeholder="搜索标题、提示词... (按 / 键快速搜索)"
+                  placeholder="搜索记录标题或提示词（按 / 键快速聚焦）"
                   allowClear
                   onChange={(e) => {
                     if (!e.target.value) setSearch('')
@@ -330,20 +410,20 @@ const HomePage: React.FC = () => {
             <Col xs={12} sm={6} md={4}>
               <Select
                 style={{ width: '100%' }}
-                placeholder="类型"
+                placeholder="生成类型"
                 allowClear
                 value={logType}
                 onChange={setLogType}
                 size="large"
               >
-                <Select.Option value="txt2img">文生图</Select.Option>
-                <Select.Option value="img2img">图生图</Select.Option>
+                <Select.Option value="txt2img">文生图（Text to Image）</Select.Option>
+                <Select.Option value="img2img">图生图（Image to Image）</Select.Option>
               </Select>
             </Col>
             <Col xs={12} sm={6} md={5}>
               <Select
                 style={{ width: '100%' }}
-                placeholder="工具"
+                placeholder="筛选工具（如：Stable Diffusion WebUI）"
                 allowClear
                 value={selectedTool}
                 onChange={setSelectedTool}
@@ -355,7 +435,7 @@ const HomePage: React.FC = () => {
               >
                 {Object.keys(tagStats.tools).map(tool => (
                   <Select.Option key={tool} value={tool}>
-                    {tool} ({tagStats.tools[tool]})
+                    {tool}（{tagStats.tools[tool]} 条记录）
                   </Select.Option>
                 ))}
               </Select>
@@ -363,7 +443,7 @@ const HomePage: React.FC = () => {
             <Col xs={24} sm={12} md={5}>
               <Select
                 style={{ width: '100%' }}
-                placeholder="模型"
+                placeholder="筛选模型（如：SDXL 1.0）"
                 allowClear
                 value={selectedModel}
                 onChange={setSelectedModel}
@@ -375,7 +455,7 @@ const HomePage: React.FC = () => {
               >
                 {Object.keys(tagStats.models).map(model => (
                   <Select.Option key={model} value={model}>
-                    {model} ({tagStats.models[model]})
+                    {model}（{tagStats.models[model]} 条记录）
                   </Select.Option>
                 ))}
               </Select>
@@ -388,43 +468,53 @@ const HomePage: React.FC = () => {
                 <span style={{ color: '#666', fontSize: 14 }}>
                   共找到 <strong style={{ color: '#1890ff' }}>{total}</strong> 条记录
                   {selectionMode && selectedIds.length > 0 && (
-                    <span style={{ marginLeft: 12, color: '#ff4d4f' }}>
-                      （已选择 <strong>{selectedIds.length}</strong> 条）
+                    <span style={{ marginLeft: 12, color: '#1890ff', fontWeight: 600 }}>
+                      已选择 <strong style={{ fontSize: 16 }}>{selectedIds.length}</strong> 条
                     </span>
                   )}
                 </span>
               )}
             </Col>
             <Col>
-              <Space>
-                <Select
-                  value={sortBy}
-                  onChange={setSortBy}
-                  style={{ width: 140 }}
-                  size="large"
-                  suffixIcon={<SortAscendingOutlined />}
-                >
-                  <Select.Option value="time_desc">最新优先</Select.Option>
-                  <Select.Option value="time_asc">最旧优先</Select.Option>
-                  <Select.Option value="title_asc">标题 A-Z</Select.Option>
-                  <Select.Option value="title_desc">标题 Z-A</Select.Option>
-                </Select>
-                <Tooltip title={viewMode === 'grid' ? '切换到瀑布流视图' : '切换到网格视图'}>
-                  <Button
-                    icon={viewMode === 'grid' ? <UnorderedListOutlined /> : <AppstoreOutlined />}
-                    onClick={() => handleViewModeChange(viewMode === 'grid' ? 'waterfall' : 'grid')}
-                    size="large"
-                  />
-                </Tooltip>
-                <Button
-                  icon={<CheckSquareOutlined />}
-                  onClick={toggleSelectionMode}
-                  type={selectionMode ? 'primary' : 'default'}
-                  size="large"
-                >
-                  {selectionMode ? '取消选择' : '批量选择'}
-                </Button>
-                {selectionMode && selectedIds.length > 0 && (
+              <Space wrap>
+                {!selectionMode ? (
+                  <>
+                    <Select
+                      value={sortBy}
+                      onChange={setSortBy}
+                      style={{ width: 120 }}
+                      size="large"
+                      suffixIcon={<SortAscendingOutlined />}
+                    >
+                      <Select.Option value="time_desc">最新优先</Select.Option>
+                      <Select.Option value="time_asc">最旧优先</Select.Option>
+                      <Select.Option value="title_asc">标题 A-Z</Select.Option>
+                      <Select.Option value="title_desc">标题 Z-A</Select.Option>
+                    </Select>
+                    <Tooltip title={viewMode === 'grid' ? '切换到瀑布流视图（纯图片展示）' : '切换到网格视图（显示详细信息）'}>
+                      <Button
+                        icon={viewMode === 'grid' ? <UnorderedListOutlined /> : <AppstoreOutlined />}
+                        onClick={() => handleViewModeChange(viewMode === 'grid' ? 'waterfall' : 'grid')}
+                        size="large"
+                      />
+                    </Tooltip>
+                    <Button
+                      icon={<CheckSquareOutlined />}
+                      onClick={toggleSelectionMode}
+                      size="large"
+                    >
+                      批量选择
+                    </Button>
+                    <Button 
+                      icon={<ReloadOutlined />} 
+                      onClick={handleRefresh}
+                      loading={loading}
+                      size="large"
+                    >
+                      刷新
+                    </Button>
+                  </>
+                ) : (
                   <>
                     <Button
                       onClick={toggleSelectAll}
@@ -435,15 +525,16 @@ const HomePage: React.FC = () => {
                     <Button
                       icon={<DownloadOutlined />}
                       onClick={handleBatchDownload}
+                      type="primary"
                       size="large"
                     >
-                      批量下载 ({selectedIds.length})
+                      下载 ({selectedIds.length})
                     </Button>
                     <Popconfirm
                       title={`确定要删除选中的 ${selectedIds.length} 条记录吗？`}
-                      description="删除后将无法恢复，所有关联的图片文件也会被删除。"
+                      description="此操作不可撤销，所有关联的图片文件也会被永久删除。"
                       onConfirm={handleBatchDelete}
-                      okText="确定"
+                      okText="确定删除"
                       cancelText="取消"
                       okButtonProps={{ danger: true }}
                     >
@@ -452,19 +543,18 @@ const HomePage: React.FC = () => {
                         danger
                         size="large"
                       >
-                        批量删除 ({selectedIds.length})
+                        删除 ({selectedIds.length})
                       </Button>
                     </Popconfirm>
+                    <Button
+                      icon={<CheckSquareOutlined />}
+                      onClick={toggleSelectionMode}
+                      size="large"
+                    >
+                      退出选择
+                    </Button>
                   </>
                 )}
-                <Button 
-                  icon={<ReloadOutlined />} 
-                  onClick={handleRefresh}
-                  loading={loading}
-                  size="large"
-                >
-                  刷新
-                </Button>
               </Space>
             </Col>
           </Row>
@@ -493,7 +583,7 @@ const HomePage: React.FC = () => {
         <Empty 
           description={
             <span style={{ fontSize: 16, color: '#8c8c8c' }}>
-              暂无数据，
+              还没有任何记录，
               <a 
                 onClick={() => navigate('/create')}
                 style={{ 
@@ -503,7 +593,7 @@ const HomePage: React.FC = () => {
                   marginLeft: 4,
                 }}
               >
-                创建第一条记录
+                立即创建第一条记录
               </a>
             </span>
           }
@@ -514,20 +604,22 @@ const HomePage: React.FC = () => {
         viewMode === 'grid' ? (
           <>
             <Row gutter={[20, 20]}>
-            {logs.map((log, index) => (
-              <Col 
-                key={log.id} 
-                xs={24} 
-                sm={12} 
-                md={12} 
-                lg={8} 
-                xl={6}
-                xxl={6}
-                style={{
-                  animation: `fadeIn 0.3s ease-out ${index * 0.02}s both`,
-                }}
-              >
-                <Card
+            {logs.map((log, index) => {
+              const isSelected = selectedIds.includes(log.id)
+              return (
+                <Col 
+                  key={log.id} 
+                  xs={24} 
+                  sm={12} 
+                  md={12} 
+                  lg={8} 
+                  xl={6}
+                  xxl={6}
+                  style={{
+                    animation: index < 20 ? `fadeIn 0.3s ease-out ${index * 0.02}s both` : 'none',
+                  }}
+                >
+                  <Card
                   hoverable
                   cover={
                     log.cover_url ? (
@@ -551,9 +643,10 @@ const HomePage: React.FC = () => {
                           }}>
                             {log.preview_urls.slice(0, 4).map((url, idx) => (
                               <div key={idx} style={{ overflow: 'hidden', position: 'relative' }}>
-                                <Image
+                                <NSFWImage
                                   src={url}
                                   alt={`${log.title} - ${idx + 1}`}
+                                  isNSFW={log.is_nsfw || false}
                                   style={{ 
                                     width: '100%', 
                                     height: '100%', 
@@ -597,47 +690,17 @@ const HomePage: React.FC = () => {
                           </div>
                         ) : (
                           /* 单张图片 */
-                          <Image
+                          <NSFWImage
                             src={log.cover_url}
                             alt={log.title}
+                            isNSFW={log.is_nsfw || false}
                             style={{ 
                               width: '100%', 
                               height: '100%', 
                               objectFit: 'cover',
                               transition: 'transform 0.3s ease',
                             }}
-                            preview={{
-                              mask: (
-                                <div style={{ 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center',
-                                  gap: 8,
-                                  color: '#fff'
-                                }}>
-                                  <EyeOutlined /> 查看
-                                </div>
-                              ),
-                              maskClassName: 'image-preview-mask',
-                            }}
-                          fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBuyh8qA4/clzGRhOBBHFmbMxY7twzgxlQqgc6mC56cJ+TsSgUF9QwMDBeP6QxKFRtYmDg+kGAYZ+BhZkOA8C8xMBj+YbA8B8A8D7kMDCwJ8QoG8A4B"
-                          onError={() => {
-                            console.error('图片加载失败:', log.cover_url)
-                            // 图片加载失败时，显示默认占位图
-                          }}
-                          loading="lazy"
-                            placeholder={
-                              <div className="image-wrapper" style={{ 
-                                width: '100%', 
-                                height: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#999'
-                              }}>
-                                <Spin size="small" />
-                              </div>
-                            }
+                            preview={false}
                           />
                         )}
                         
@@ -722,119 +785,215 @@ const HomePage: React.FC = () => {
                     }
                   }}
                   style={{ 
-                    cursor: selectionMode ? 'default' : 'pointer',
+                    cursor: selectionMode ? 'pointer' : 'pointer',
                     borderRadius: 12,
                     overflow: 'hidden',
-                    border: selectedIds.includes(log.id) ? '2px solid #1890ff' : '1px solid #e8e8e8',
+                    border: selectedIds.includes(log.id) 
+                      ? '2px solid #1890ff' 
+                      : selectionMode 
+                        ? '2px solid #e8e8e8' 
+                        : '1px solid #e8e8e8',
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
-                    background: selectedIds.includes(log.id) ? '#e6f7ff' : '#fff',
+                    background: selectedIds.includes(log.id) 
+                      ? 'linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%)' 
+                      : selectionMode
+                        ? '#fafafa'
+                        : '#fff',
                     position: 'relative',
+                    transition: 'all 0.2s',
                   }}
-                  bodyStyle={{ padding: '14px', flex: 1, display: 'flex', flexDirection: 'column' }}
+                  bodyStyle={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}
                   className="log-card"
                 >
                   {selectionMode && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 12,
-                      right: 12,
-                      zIndex: 10,
-                    }}>
-                      <Checkbox
-                        checked={selectedIds.includes(log.id)}
-                        onChange={(e) => {
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 12,
+                          right: 12,
+                          pointerEvents: 'auto',
+                        }}
+                        onClick={(e) => {
                           e.stopPropagation()
                           toggleSelect(log.id)
                         }}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          background: '#fff',
-                          borderRadius: '50%',
-                          padding: 4,
-                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                        }}
-                      />
+                      >
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 6,
+                            background: selectedIds.includes(log.id) ? '#1890ff' : 'rgba(255, 255, 255, 0.95)',
+                            border: selectedIds.includes(log.id) ? '2px solid #1890ff' : '2px solid rgba(0, 0, 0, 0.15)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={!isSelected ? (e) => {
+                            e.currentTarget.style.borderColor = '#1890ff'
+                            e.currentTarget.style.background = 'rgba(24, 144, 255, 0.1)'
+                          } : undefined}
+                          onMouseLeave={!isSelected ? (e) => {
+                            e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.15)'
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)'
+                          } : undefined}
+                        >
+                          {isSelected && (
+                            <span style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✓</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                   <Card.Meta
                     title={
-                      <Tooltip title={log.title}>
-                        <div style={{ 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis', 
-                          whiteSpace: 'nowrap',
-                          fontSize: 15,
-                          fontWeight: 600,
-                          marginBottom: 10,
-                          color: '#262626',
-                          lineHeight: 1.4,
-                        }}>
-                          {log.title}
-                        </div>
-                      </Tooltip>
+                      <div style={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        marginBottom: 8,
+                      }}>
+                        <Tooltip title={log.title}>
+                          <div style={{ 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis', 
+                            whiteSpace: 'nowrap',
+                            fontSize: 15,
+                            fontWeight: 600,
+                            color: '#262626',
+                            lineHeight: 1.4,
+                            flex: 1,
+                            minWidth: 0,
+                          }}>
+                            {log.title}
+                          </div>
+                        </Tooltip>
+                        <Tag 
+                          color={log.log_type === 'img2img' ? 'blue' : 'cyan'} 
+                          style={{ 
+                            margin: 0, 
+                            fontSize: 11,
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                            border: 'none',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {log.log_type === 'img2img' ? '图生图' : '文生图'}
+                        </Tag>
+                      </div>
                     }
                     description={
                       <div>
-                        <Space size={[6, 6]} wrap style={{ marginBottom: 10 }}>
-                          {log.log_type === 'img2img' && (
-                            <Tag 
-                              color="blue" 
-                              style={{ 
-                                margin: 0, 
-                                fontSize: 11,
-                                padding: '2px 8px',
-                                borderRadius: 4,
-                                border: 'none',
-                              }}
-                            >
-                              图生图
-                            </Tag>
-                          )}
-                          {log.models.length > 0 && (
-                            <>
-                              {log.models.slice(0, 2).map(model => (
-                                <Tag 
-                                  key={model} 
-                                  color="purple"
-                                  style={{ 
-                                    margin: 0, 
-                                    fontSize: 11,
-                                    padding: '2px 8px',
-                                    borderRadius: 4,
-                                    border: 'none',
-                                  }}
-                                >
-                                  {model}
-                                </Tag>
-                              ))}
-                              {log.models.length > 2 && (
-                                <Tag 
-                                  style={{ 
-                                    margin: 0, 
-                                    fontSize: 11,
-                                    padding: '2px 8px',
-                                    borderRadius: 4,
-                                    background: '#f0f0f0',
-                                    color: '#666',
-                                    border: 'none',
-                                  }}
-                                >
-                                  +{log.models.length - 2}
-                                </Tag>
-                              )}
-                            </>
-                          )}
-                        </Space>
+                        {/* 标签区域 - 工具和模型合并到一行 */}
+                        {(log.tools && log.tools.length > 0) || (log.models && log.models.length > 0) ? (
+                          <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                            {/* 工具标签 - 橙色 */}
+                            {log.tools && log.tools.length > 0 && (
+                              <>
+                                {[...new Set(log.tools)].slice(0, 2).map(tool => (
+                                  <Tag 
+                                    key={tool} 
+                                    color="orange"
+                                    style={{ 
+                                      margin: 0, 
+                                      fontSize: 11,
+                                      padding: '2px 8px',
+                                      borderRadius: 4,
+                                      border: 'none',
+                                    }}
+                                  >
+                                    {tool}
+                                  </Tag>
+                                ))}
+                                {[...new Set(log.tools)].length > 2 && (
+                                  <Tag 
+                                    style={{ 
+                                      margin: 0, 
+                                      fontSize: 11,
+                                      padding: '2px 8px',
+                                      borderRadius: 4,
+                                      background: '#f0f0f0',
+                                      color: '#666',
+                                      border: 'none',
+                                    }}
+                                  >
+                                    +{[...new Set(log.tools)].length - 2}
+                                  </Tag>
+                                )}
+                              </>
+                            )}
+                            
+                            {/* 分隔符（如果工具和模型都存在） */}
+                            {log.tools && log.tools.length > 0 && log.models && log.models.length > 0 && (
+                              <span style={{ color: '#d9d9d9', fontSize: 12, margin: '0 2px' }}>·</span>
+                            )}
+                            
+                            {/* 模型标签 - 紫色 */}
+                            {log.models && log.models.length > 0 && (
+                              <>
+                                {[...new Set(log.models)].slice(0, 2).map(model => (
+                                  <Tag 
+                                    key={model} 
+                                    color="purple"
+                                    style={{ 
+                                      margin: 0, 
+                                      fontSize: 11,
+                                      padding: '2px 8px',
+                                      borderRadius: 4,
+                                      border: 'none',
+                                    }}
+                                  >
+                                    {model}
+                                  </Tag>
+                                ))}
+                                {[...new Set(log.models)].length > 2 && (
+                                  <Tag 
+                                    style={{ 
+                                      margin: 0, 
+                                      fontSize: 11,
+                                      padding: '2px 8px',
+                                      borderRadius: 4,
+                                      background: '#f0f0f0',
+                                      color: '#666',
+                                      border: 'none',
+                                    }}
+                                  >
+                                    +{[...new Set(log.models)].length - 2}
+                                  </Tag>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ) : null}
+                        
+                        {/* 日期和图片数量 - 更紧凑 */}
                         <div style={{ 
                           fontSize: 12, 
                           color: '#8c8c8c', 
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          paddingTop: 4,
-                          borderTop: '1px solid #f0f0f0',
+                          paddingTop: (log.tools && log.tools.length > 0) || (log.models && log.models.length > 0) ? 8 : 0,
+                          marginTop: (log.tools && log.tools.length > 0) || (log.models && log.models.length > 0) ? 0 : 0,
+                          borderTop: (log.tools && log.tools.length > 0) || (log.models && log.models.length > 0) ? '1px solid #f0f0f0' : 'none',
                         }}>
                           <span>{new Date(log.created_at).toLocaleDateString('zh-CN', {
                             month: '2-digit',
@@ -846,6 +1005,8 @@ const HomePage: React.FC = () => {
                               display: 'flex',
                               alignItems: 'center',
                               gap: 4,
+                              fontSize: 11,
+                              fontWeight: 500,
                             }}>
                               <PictureOutlined style={{ fontSize: 11 }} />
                               {log.output_count}
@@ -870,13 +1031,6 @@ const HomePage: React.FC = () => {
                   .log-card:hover .ant-image img {
                     transform: scale(1.05);
                   }
-                  .image-preview-mask {
-                    opacity: 0;
-                    transition: opacity 0.3s;
-                  }
-                  .log-card:hover .image-preview-mask {
-                    opacity: 1;
-                  }
                   @keyframes fadeIn {
                     from {
                       opacity: 0;
@@ -888,8 +1042,9 @@ const HomePage: React.FC = () => {
                     }
                   }
                 `}</style>
-              </Col>
-            ))}
+                  </Col>
+                )
+              })}
           </Row>
 
           {/* 分页 */}
@@ -922,15 +1077,19 @@ const HomePage: React.FC = () => {
           </>
         ) : (
           /* 瀑布流视图 - 纯图片展示，无任何标签和参数 */
+          <>
           <div 
             className="waterfall-container"
             style={{
-              columnCount: window.innerWidth > 1400 ? 5 : window.innerWidth > 1200 ? 4 : window.innerWidth > 900 ? 3 : 2,
-              columnGap: 16,
+              width: '100%',
+              columnCount: waterfallColumns,
+              columnGap: 20,
+              columnFill: 'balance',
             }}
           >
             {logs.map((log, index) => {
               const coverImage = log.cover_url || (log.preview_urls && log.preview_urls[0])
+              const isSelected = selectedIds.includes(log.id)
               
               return (
                 <div
@@ -944,57 +1103,116 @@ const HomePage: React.FC = () => {
                   }}
                   style={{
                     breakInside: 'avoid',
+                    pageBreakInside: 'avoid',
                     marginBottom: 16,
                     borderRadius: 12,
                     overflow: 'hidden',
-                    border: selectedIds.includes(log.id) ? '3px solid #1890ff' : '2px solid transparent',
+                    border: isSelected 
+                      ? '3px solid #1890ff' 
+                      : selectionMode
+                        ? '2px solid #e8e8e8'
+                        : '2px solid transparent',
+                    background: isSelected 
+                      ? 'rgba(24, 144, 255, 0.05)' 
+                      : selectionMode
+                        ? '#fafafa'
+                        : 'transparent',
                     position: 'relative',
-                    animation: `fadeIn 0.3s ease-out ${index * 0.02}s both`,
+                    animation: index < 20 ? `fadeIn 0.3s ease-out ${index * 0.02}s both` : 'none',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    display: 'inline-block',
+                    display: 'block',
                     width: '100%',
                     cursor: 'pointer',
+                    boxSizing: 'border-box',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+                    willChange: selectionMode ? 'auto' : 'transform, box-shadow',
                   }}
                   className="waterfall-card"
+                  onMouseEnter={!selectionMode ? (e) => {
+                    const target = e.currentTarget
+                    target.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.12)'
+                    target.style.transform = 'translateY(-4px)'
+                    target.style.zIndex = '1'
+                  } : undefined}
+                  onMouseLeave={!selectionMode ? (e) => {
+                    const target = e.currentTarget
+                    target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.06)'
+                    target.style.transform = 'translateY(0)'
+                    target.style.zIndex = '0'
+                  } : undefined}
                 >
                   {selectionMode && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      zIndex: 10,
-                    }}>
-                      <Checkbox
-                        checked={selectedIds.includes(log.id)}
-                        onChange={(e) => {
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          pointerEvents: 'auto',
+                        }}
+                        onClick={(e) => {
                           e.stopPropagation()
                           toggleSelect(log.id)
                         }}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          background: '#fff',
-                          borderRadius: '50%',
-                          padding: 4,
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-                        }}
-                      />
+                      >
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                            background: isSelected ? '#1890ff' : 'rgba(255, 255, 255, 0.95)',
+                            border: isSelected ? '2px solid #1890ff' : '2px solid rgba(0, 0, 0, 0.2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!selectedIds.includes(log.id)) {
+                              e.currentTarget.style.borderColor = '#1890ff'
+                              e.currentTarget.style.background = 'rgba(24, 144, 255, 0.1)'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!selectedIds.includes(log.id)) {
+                              e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.2)'
+                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)'
+                            }
+                          }}
+                        >
+                          {selectedIds.includes(log.id) && (
+                            <span style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>✓</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                   
                   {/* 纯图片展示 */}
                   {coverImage ? (
-                    <Image
+                    <NSFWImage
                       src={coverImage}
                       alt={log.title}
+                      isNSFW={log.is_nsfw || false}
                       style={{
                         width: '100%',
                         height: 'auto',
                         display: 'block',
                         transition: 'transform 0.3s ease',
                       }}
-                      preview={{
-                        src: coverImage,
-                      }}
+                      preview={false}
                       loading="lazy"
                     />
                   ) : (
@@ -1013,6 +1231,8 @@ const HomePage: React.FC = () => {
               )
             })}
           
+          </div>
+          
           {/* 分页 - 瀑布流中需要单独显示 */}
           {total > pageSize && (
             <div style={{ 
@@ -1020,7 +1240,6 @@ const HomePage: React.FC = () => {
               marginTop: 32,
               padding: '24px 0',
               width: '100%',
-              columnSpan: 'all',
             }}>
               <Pagination
                 current={page}
@@ -1042,7 +1261,7 @@ const HomePage: React.FC = () => {
               />
             </div>
           )}
-          </div>
+          </>
         )
       )}
     </div>
