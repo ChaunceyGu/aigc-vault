@@ -33,7 +33,10 @@ def get_proxy_url(file_key: str) -> str:
     Returns:
         通过 API 代理的 URL
     """
-    return f"/api/assets/{file_key}/stream"
+    from urllib.parse import quote
+    # URL 编码 file_key，确保特殊字符（如 /、% 等）被正确编码
+    encoded_file_key = quote(file_key, safe='')
+    return f"/api/assets/{encoded_file_key}/stream"
 
 
 @router.post("/")

@@ -2,7 +2,7 @@
 资源相关 API
 处理文件访问和下载
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import logging
@@ -15,19 +15,20 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/{file_key}/url")
+@router.get("/{file_key:path}/url")
 async def get_file_url(
-    file_key: str,
+    file_key: str = Path(..., description="文件标识符（可能包含 / 字符）"),
     expires_in: int = 3600,
     db: Session = Depends(get_db)
 ):
     """
     获取文件的访问 URL（通过 API 代理的 URL，而不是直接返回 RustFS URL）
     
-    - **file_key**: 文件标识符
+    - **file_key**: 文件标识符（可能包含 / 字符，如 2024/12/13/uuid-filename.jpg）
     - **expires_in**: URL 有效期（秒），默认 3600（此参数保留用于兼容，实际通过 API 代理访问）
     """
     try:
+        # FastAPI 会自动解码路径参数，所以这里不需要手动解码
         # 验证文件是否存在（检查数据库）
         asset = db.query(LogAsset).filter(LogAsset.file_key == file_key).first()
         if not asset:
@@ -35,7 +36,9 @@ async def get_file_url(
         
         # 返回通过 API 代理的 URL，而不是直接返回 RustFS URL
         # 这样外网可以通过 web 端口访问，而不需要暴露 RustFS 端口
-        url = f"/api/assets/{file_key}/stream"
+        from urllib.parse import quote
+        encoded_file_key = quote(file_key, safe='')
+        url = f"/api/assets/{encoded_file_key}/stream"
         
         return {
             "file_key": file_key,
@@ -49,18 +52,19 @@ async def get_file_url(
         raise HTTPException(status_code=500, detail=f"获取文件 URL 失败: {str(e)}")
 
 
-@router.get("/{file_key}/stream")
+@router.get("/{file_key:path}/stream")
 async def stream_file(
-    file_key: str,
+    file_key: str = Path(..., description="文件标识符（可能包含 / 字符）"),
     db: Session = Depends(get_db)
 ):
     """
     流式传输文件（用于图片显示）
     通过后端 API 代理访问 RustFS，这样外网可以通过 web 端口访问
     
-    - **file_key**: 文件标识符
+    - **file_key**: 文件标识符（可能包含 / 字符，如 2024/12/13/uuid-filename.jpg）
     """
     try:
+        # FastAPI 会自动解码路径参数，所以这里不需要手动解码
         # 验证文件是否存在（检查数据库）
         asset = db.query(LogAsset).filter(LogAsset.file_key == file_key).first()
         if not asset:
@@ -96,18 +100,19 @@ async def stream_file(
         raise HTTPException(status_code=500, detail=f"获取文件失败: {str(e)}")
 
 
-@router.get("/{file_key}/download")
+@router.get("/{file_key:path}/download")
 async def download_file(
-    file_key: str,
+    file_key: str = Path(..., description="文件标识符（可能包含 / 字符）"),
     db: Session = Depends(get_db)
 ):
     """
     下载文件
     通过后端 API 代理访问 RustFS，这样外网可以通过 web 端口下载
     
-    - **file_key**: 文件标识符
+    - **file_key**: 文件标识符（可能包含 / 字符，如 2024/12/13/uuid-filename.jpg）
     """
     try:
+        # FastAPI 会自动解码路径参数，所以这里不需要手动解码
         # 验证文件是否存在（检查数据库）
         asset = db.query(LogAsset).filter(LogAsset.file_key == file_key).first()
         if not asset:
