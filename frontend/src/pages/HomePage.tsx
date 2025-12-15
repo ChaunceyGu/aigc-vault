@@ -119,7 +119,6 @@ const HomePage: React.FC = () => {
   // 首次加载时获取标签统计（不依赖其他状态）
   useEffect(() => {
     loadTagStats()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])  // 只在组件挂载时执行一次
 
   useEffect(() => {
@@ -253,7 +252,7 @@ const HomePage: React.FC = () => {
     }, 300)
     
     return () => clearTimeout(timer)
-  }, [searchInput])  // 当searchInput变化时触发防抖
+  }, [searchInput, search])  // 当searchInput或search变化时触发防抖
   
   const handleSearch = (value: string) => {
     setSearchInput(value)

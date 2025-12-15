@@ -618,7 +618,7 @@ const LogDetailPage: React.FC = () => {
                               border: '2px solid transparent',
                               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                             }}
-                            onClick={(e) => {
+                            onClick={() => {
                               // 如果是NSFW且未显示，不触发预览灯箱（由NSFWImage组件自己处理）
                               if (log.is_nsfw && !showNsfw) {
                                 return
@@ -797,7 +797,7 @@ const LogDetailPage: React.FC = () => {
                                   boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                                   position: 'relative',
                                 }}
-                                onClick={(e) => {
+                                onClick={() => {
                                   // 如果是NSFW且未显示，不触发预览灯箱（由NSFWImage组件自己处理）
                                   if (log.is_nsfw && !showNsfw) {
                                     return
