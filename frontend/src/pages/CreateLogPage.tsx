@@ -21,6 +21,7 @@ import PasswordModal from '../components/PasswordModal'
 import { createLog } from '../services/logs'
 import { getTools, getModels } from '../services/tags'
 import { getRecentTools, saveRecentTool, getRecentModels, saveRecentModel } from '../utils/storage'
+import { smartCompress } from '../utils/imageCompress'
 
 const { TextArea } = Input
 
@@ -120,20 +121,60 @@ const CreateLogPage: React.FC = () => {
         group.models.forEach(saveRecentModel)
       })
 
-      // 准备输入文件
-      const inputFileList = inputFiles
-        .filter(file => file.originFileObj)
-        .map(file => file.originFileObj!)
+      // 压缩并准备输入文件（仅 img2img 模式）
+      const inputFileList: File[] = []
+      if (logType === 'img2img' && inputFiles.length > 0) {
+        message.loading({ content: '正在压缩输入图片...', key: 'compress', duration: 0 })
+        for (const file of inputFiles) {
+          if (file.originFileObj) {
+            try {
+              const compressed = await smartCompress(file.originFileObj, {
+                maxWidth: 1920,
+                maxHeight: 1920,
+                quality: 0.85
+              })
+              inputFileList.push(compressed)
+            } catch (error) {
+              console.warn('压缩失败，使用原文件:', error)
+              inputFileList.push(file.originFileObj)
+            }
+          }
+        }
+        message.destroy('compress')
+      }
 
-      // 准备输出组数据
-      const outputGroupsData = outputGroups.map(group => ({
-        tools: group.tools,
-        models: group.models,
-        outputFiles: group.outputFiles
-          .filter(file => file.originFileObj)
-          .map(file => file.originFileObj!)
-      }))
+      // 压缩并准备输出组数据
+      message.loading({ content: '正在压缩输出图片...', key: 'compress-output', duration: 0 })
+      const outputGroupsData = await Promise.all(
+        outputGroups.map(async (group) => {
+          const compressedFiles: File[] = []
+          for (const file of group.outputFiles) {
+            if (file.originFileObj) {
+              try {
+                const compressed = await smartCompress(file.originFileObj, {
+                  maxWidth: 1920,
+                  maxHeight: 1920,
+                  quality: 0.85
+                })
+                compressedFiles.push(compressed)
+              } catch (error) {
+                console.warn('压缩失败，使用原文件:', error)
+                compressedFiles.push(file.originFileObj)
+              }
+            }
+          }
+          return {
+            tools: group.tools,
+            models: group.models,
+            outputFiles: compressedFiles
+          }
+        })
+      )
+      message.destroy('compress-output')
 
+      setUploadProgress(0)
+      message.loading({ content: '正在上传...', key: 'upload', duration: 0 })
+      
       await createLog({
         title: values.title,
         logType: logType,
@@ -143,7 +184,17 @@ const CreateLogPage: React.FC = () => {
         inputNotes: Object.keys(inputNotes).length > 0 ? inputNotes : undefined,
         outputGroups: outputGroupsData,
         isNsfw: isNsfw,
+      }, (progress) => {
+        setUploadProgress(progress)
+        message.loading({ 
+          content: `正在上传... ${progress}%`, 
+          key: 'upload', 
+          duration: 0 
+        })
       })
+      
+      message.destroy('upload')
+      setUploadProgress(0)
 
       message.success({
         content: '记录创建成功！',

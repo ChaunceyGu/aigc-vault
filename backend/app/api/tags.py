@@ -9,6 +9,7 @@ from typing import List, Dict
 
 from app.database import get_db
 from app.models.gen_log import GenLog
+from app.utils.cache import cache
 
 router = APIRouter()
 
@@ -18,7 +19,13 @@ async def get_tools(db: Session = Depends(get_db)) -> List[str]:
     """
     获取所有工具标签
     同时查询主表和输出组表的数据
+    使用缓存优化性能（缓存5分钟）
     """
+    cache_key = "tags:tools"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    
     # 从所有记录中提取 tools 数组的所有唯一值
     # PostgreSQL 使用 unnest 函数展开数组
     from sqlalchemy import text
@@ -41,6 +48,9 @@ async def get_tools(db: Session = Depends(get_db)) -> List[str]:
     """)).fetchall()
     # 过滤掉空字符串和 None
     tools = sorted([row[0] for row in result if row[0] and row[0].strip()])
+    
+    # 缓存结果（5分钟）
+    cache.set(cache_key, tools, 300)
     return tools
 
 
@@ -49,7 +59,13 @@ async def get_models(db: Session = Depends(get_db)) -> List[str]:
     """
     获取所有模型标签
     同时查询主表和输出组表的数据
+    使用缓存优化性能（缓存5分钟）
     """
+    cache_key = "tags:models"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    
     # 从所有记录中提取 models 数组的所有唯一值
     from sqlalchemy import text
     result = db.execute(text("""
@@ -71,6 +87,9 @@ async def get_models(db: Session = Depends(get_db)) -> List[str]:
     """)).fetchall()
     # 过滤掉空字符串和 None
     models = sorted([row[0] for row in result if row[0] and row[0].strip()])
+    
+    # 缓存结果（5分钟）
+    cache.set(cache_key, models, 300)
     return models
 
 
@@ -79,7 +98,13 @@ async def get_tag_stats(db: Session = Depends(get_db)) -> Dict:
     """
     获取标签统计信息（用于筛选器）
     同时查询主表和输出组表的数据
+    使用缓存优化性能（缓存5分钟）
     """
+    cache_key = "tags:stats"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    
     from sqlalchemy import text
     
     # 工具统计：从主表和输出组表合并查询
@@ -128,8 +153,12 @@ async def get_tag_stats(db: Session = Depends(get_db)) -> Dict:
     # 过滤掉空字符串和 None
     models_stats = {row[0]: row[1] for row in models_result if row[0] and row[0].strip()}
     
-    return {
+    result = {
         "tools": tools_stats,
         "models": models_stats
     }
+    
+    # 缓存结果（5分钟）
+    cache.set(cache_key, result, 300)
+    return result
 

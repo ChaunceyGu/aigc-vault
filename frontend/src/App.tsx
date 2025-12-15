@@ -1,12 +1,16 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout, Tooltip } from 'antd'
+import { lazy, Suspense } from 'react'
 import AppHeader from './components/layout/AppHeader'
 import BackToTop from './components/BackToTop'
-import HomePage from './pages/HomePage'
-import CreateLogPage from './pages/CreateLogPage'
-import LogDetailPage from './pages/LogDetailPage'
-import EditLogPage from './pages/EditLogPage'
+import { Spin } from 'antd'
 import { getFullVersionString, getVersionInfo } from './utils/version'
+
+// 路由懒加载，优化首屏加载速度
+const HomePage = lazy(() => import('./pages/HomePage'))
+const CreateLogPage = lazy(() => import('./pages/CreateLogPage'))
+const LogDetailPage = lazy(() => import('./pages/LogDetailPage'))
+const EditLogPage = lazy(() => import('./pages/EditLogPage'))
 
 const { Content, Footer } = Layout
 
@@ -20,12 +24,23 @@ function App() {
           background: 'linear-gradient(to bottom, #fafafa 0%, #f5f5f5 100%)',
           minHeight: 'calc(100vh - 64px - 70px)',
         }}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/create" element={<CreateLogPage />} />
-            <Route path="/logs/:id" element={<LogDetailPage />} />
-            <Route path="/logs/:id/edit" element={<EditLogPage />} />
-          </Routes>
+          <Suspense fallback={
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              minHeight: '400px' 
+            }}>
+              <Spin size="large" tip="加载中..." />
+            </div>
+          }>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/create" element={<CreateLogPage />} />
+              <Route path="/logs/:id" element={<LogDetailPage />} />
+              <Route path="/logs/:id/edit" element={<EditLogPage />} />
+            </Routes>
+          </Suspense>
           <BackToTop />
         </Content>
         <Footer style={{ 

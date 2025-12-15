@@ -15,6 +15,7 @@ from app.models.log_asset import LogAsset
 from app.models.output_group import OutputGroup
 from app.services.rustfs_client import rustfs_client
 from app.utils.image_processor import generate_thumbnail, validate_image
+from app.utils.cache import cache
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -22,13 +23,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_proxy_url(file_key: str) -> str:
+def get_proxy_url(file_key: str, size: str = None) -> str:
     """
     生成通过 API 代理的文件访问 URL
     这样外网可以通过 web 端口访问，而不需要暴露 RustFS 端口
     
     Args:
         file_key: 文件标识符
+        size: 图片尺寸，可选值：'thumb'（缩略图）、'medium'（中等尺寸）、None（原图）
         
     Returns:
         通过 API 代理的 URL
@@ -36,7 +38,10 @@ def get_proxy_url(file_key: str) -> str:
     from urllib.parse import quote
     # URL 编码 file_key，确保特殊字符（如 /、% 等）被正确编码
     encoded_file_key = quote(file_key, safe='')
-    return f"/api/assets/{encoded_file_key}/stream"
+    url = f"/api/assets/{encoded_file_key}/stream"
+    if size:
+        url += f"?size={size}"
+    return url
 
 
 @router.post("/")
@@ -264,6 +269,10 @@ async def create_log(
         
         logger.info(f"创建记录成功: ID={log.id}, title={title}")
         
+        # 清除相关缓存
+        cache.clear("tags:")  # 清除标签相关缓存
+        cache.clear("logs_")  # 清除列表缓存
+        
         return {
             "id": log.id,
             "title": log.title,
@@ -358,19 +367,40 @@ async def list_logs(
         total = query.count()
         logs = query.offset((page - 1) * page_size).limit(page_size).all()
         
+        # 优化：批量查询所有相关的 assets 和 output_groups，避免 N+1 查询
+        log_ids = [log.id for log in logs]
+        
+        # 批量查询所有 output 图片
+        all_output_assets = db.query(LogAsset).filter(
+            LogAsset.log_id.in_(log_ids),
+            LogAsset.asset_type == 'output'
+        ).order_by(LogAsset.sort_order).all()
+        
+        # 按 log_id 分组
+        assets_by_log_id: dict[int, list] = {}
+        for asset in all_output_assets:
+            if asset.log_id not in assets_by_log_id:
+                assets_by_log_id[asset.log_id] = []
+            assets_by_log_id[asset.log_id].append(asset)
+        
+        # 批量查询所有输出组
+        all_output_groups = db.query(OutputGroup).filter(
+            OutputGroup.log_id.in_(log_ids)
+        ).order_by(OutputGroup.sort_order).all()
+        
+        # 按 log_id 分组
+        groups_by_log_id: dict[int, list] = {}
+        for group in all_output_groups:
+            if group.log_id not in groups_by_log_id:
+                groups_by_log_id[group.log_id] = []
+            groups_by_log_id[group.log_id].append(group)
+        
         # 获取封面图和输出图片信息
         result = []
         for log in logs:
-            # 查找所有 output 图片
-            output_assets = db.query(LogAsset).filter(
-                LogAsset.log_id == log.id,
-                LogAsset.asset_type == 'output'
-            ).order_by(LogAsset.sort_order).all()
-            
-            # 获取所有输出组的工具和模型（用于列表显示）
-            output_groups = db.query(OutputGroup).filter(
-                OutputGroup.log_id == log.id
-            ).order_by(OutputGroup.sort_order).all()
+            # 从批量查询的结果中获取
+            output_assets = assets_by_log_id.get(log.id, [])
+            output_groups = groups_by_log_id.get(log.id, [])
             
             # 合并所有组的工具和模型（去重）
             all_tools = set()
@@ -393,8 +423,9 @@ async def list_logs(
             
             # 获取前几张图片的 URL（最多4张，用于预览）
             # 使用 API 代理 URL，这样外网可以通过 web 端口访问
+            # 列表显示使用中等尺寸图片（1920px，质量85%），减少传输量
             for asset in output_assets[:4]:
-                url = get_proxy_url(asset.file_key)
+                url = get_proxy_url(asset.file_key, size='medium')  # 使用中等尺寸，减少传输量
                 preview_urls.append(url)
                 if not cover_url:  # 第一张作为封面
                     cover_url = url
@@ -583,6 +614,10 @@ async def update_log(
         
         logger.info(f"更新记录成功: ID={log_id}, title={title}")
         
+        # 清除相关缓存
+        cache.clear("tags:")  # 清除标签相关缓存
+        cache.clear("logs_")  # 清除列表缓存
+        
         return {
             "id": log.id,
             "title": log.title,
@@ -639,6 +674,10 @@ async def delete_log(log_id: int, db: Session = Depends(get_db)):
         db.commit()
         
         logger.info(f"删除记录成功: ID={log_id}, 删除文件: {len(deleted_files)}, 失败: {len(failed_files)}")
+        
+        # 清除相关缓存
+        cache.clear("tags:")  # 清除标签相关缓存
+        cache.clear("logs_")  # 清除列表缓存
         
         if failed_files:
             logger.warning(f"部分文件删除失败: {failed_files}")
@@ -879,6 +918,10 @@ async def update_output_group(
         
         logger.info(f"更新输出组成功: log_id={log_id}, group_id={group_id}")
         
+        # 清除相关缓存
+        cache.clear("tags:")  # 清除标签相关缓存
+        cache.clear("logs_")  # 清除列表缓存
+        
         return {
             "id": output_group.id,
             "log_id": log.id,
@@ -936,6 +979,10 @@ async def delete_output_group(
         db.commit()
         
         logger.info(f"删除输出组成功: log_id={log_id}, group_id={group_id}")
+        
+        # 清除相关缓存
+        cache.clear("tags:")  # 清除标签相关缓存
+        cache.clear("logs_")  # 清除列表缓存
         
         return {"message": "输出组已删除"}
         

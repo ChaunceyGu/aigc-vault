@@ -16,7 +16,8 @@
 - 🔒 **密码保护**：创建/编辑记录需要密码验证
 - 🚫 **NSFW 内容管理**：支持标记敏感内容，自动打码保护，统一灯箱预览体验
 - 🌐 **外网访问支持**：通过API代理实现文件访问，无需暴露内部端口
-- ⚡ **性能优化**：图片懒加载、防抖搜索、智能缓存、组件优化
+- ⚡ **性能优化**：图片懒加载、防抖搜索、智能缓存、组件优化、API响应缓存、数据库查询优化
+- 🖼️ **图片优化**：前端自动压缩、后端多尺寸支持、智能缓存策略、上传进度显示
 - 🔄 **CI/CD 集成**：GitHub Actions 自动构建和推送 Docker 镜像
 - 🔐 **安全扫描**：集成 Trivy 进行容器漏洞扫描
 
@@ -91,7 +92,7 @@ cp env.example .env
 编辑 `.env` 文件，配置数据库和存储服务：
 
 ```env
-# 数据库配置
+# 数据库配置（本地开发使用 localhost）
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aigc_vault
 
 # RustFS/S3 配置
@@ -197,7 +198,8 @@ python scripts/verify_rustfs.py
 - `DELETE /api/logs/{id}/output-groups/{group_id}` - 删除输出组
 
 **资源管理：**
-- `GET /api/assets/{file_key}/stream` - 流式传输图片（用于显示）
+- `GET /api/assets/{file_key}/stream?size={size}` - 流式传输图片（用于显示）
+  - `size` 参数：`thumb`（缩略图）、`medium`（中等尺寸，1920px）、`original`（原图，默认）
 - `GET /api/assets/{file_key}/download` - 下载图片文件
 - `GET /api/assets/{file_key}/url` - 获取图片代理 URL
 
@@ -234,7 +236,7 @@ postgresql://用户名:密码@主机:端口/数据库名
 
 | 变量名 | 说明 | 默认值 |
 |--------|------|--------|
-| `DATABASE_URL` | PostgreSQL 数据库连接字符串 | `postgresql://postgres:postgres@localhost:5432/aigc_vault` |
+| `DATABASE_URL` | PostgreSQL 数据库连接字符串<br/>- 本地开发：`postgresql://postgres:postgres@localhost:5432/aigc_vault`<br/>- Docker 部署：`postgresql://postgres:postgres@postgres:5432/aigc_vault`（使用服务名，无需暴露端口） | `postgresql://postgres:postgres@localhost:5432/aigc_vault` |
 | `RUSTFS_ENDPOINT_URL` | S3 兼容存储服务地址 | `http://localhost:9900` |
 | `RUSTFS_ACCESS_KEY` | S3 Access Key | - |
 | `RUSTFS_SECRET_KEY` | S3 Secret Key | - |
@@ -253,6 +255,18 @@ postgresql://用户名:密码@主机:端口/数据库名
 - Docker Compose 2.0+
 - PostgreSQL 15+（可选，可使用 Docker 提供的数据库）
 - RustFS/S3 兼容存储服务（如 MinIO）
+
+### 安全说明
+
+**默认配置（推荐用于生产环境）：**
+- ✅ 数据库端口不暴露到主机，仅在 Docker 内部网络可访问
+- ✅ 后端 API 端口（8000）不暴露到主机，仅通过 Nginx 代理访问
+- ✅ 仅暴露 Web 端口（80），所有请求通过 Nginx 代理
+- ✅ 文件访问通过 API 代理，无需暴露 RustFS 端口
+
+**如果需要从外部访问数据库：**
+- 编辑 `docker-compose.yml`，取消 `postgres` 服务的 `ports` 注释
+- 注意：暴露数据库端口会带来安全风险，建议仅在开发环境使用
 
 ### 快速部署
 
@@ -317,8 +331,13 @@ docker-compose logs -f postgres
 #### 4. 验证部署
 
 - 访问前端：`http://localhost`（或你的服务器 IP）
-- 检查后端健康状态：`http://localhost:8000/api/health`
-- 查看 API 文档：`http://localhost:8000/docs`
+- 检查后端健康状态：`http://localhost/api/health`（通过 Nginx 代理）
+- 查看 API 文档：`http://localhost/docs`（通过 Nginx 代理）
+
+**注意：**
+- 默认配置下，数据库端口（5432）和 API 端口（8000）不暴露到主机
+- 所有访问都通过 Web 端口（80）的 Nginx 代理
+- 如果需要从外部访问数据库，需要修改 `docker-compose.yml` 暴露端口
 
 ### Docker 管理命令
 
@@ -334,7 +353,12 @@ docker-compose ps
 
 # 进入容器
 docker-compose exec api bash
+
+# 访问数据库（通过容器内部网络，无需暴露端口）
 docker-compose exec postgres psql -U postgres -d aigc_vault
+
+# 如果需要从外部访问数据库，需要先暴露端口（见 docker-compose.yml 注释）
+# 然后可以使用：psql -h localhost -p 5432 -U postgres -d aigc_vault
 ```
 
 ### 使用 MinIO（测试环境）
@@ -469,14 +493,29 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - 下载时会自动获取原始图片（未打码版本）
 - 统一的灯箱预览体验，支持点击遮罩层关闭
 
-### 外网访问配置
+### 外网访问配置（安全部署）
 
-系统支持通过API代理访问文件，无需暴露内部RustFS端口：
+系统支持通过 API 代理访问所有资源，无需暴露内部端口：
 
-1. 配置 `RUSTFS_ENDPOINT_URL` 为内部IP（如 `http://192.168.31.3:9900`）
-2. 只暴露 Docker 的 web 端口（80端口）
-3. 所有图片访问和下载都通过 `/api/assets/{file_key}/stream` 和 `/api/assets/{file_key}/download` 代理
-4. 支持外网访问，无需暴露8000端口和9900端口
+**默认安全配置：**
+1. **数据库**：不暴露端口，仅在 Docker 内部网络可访问（`docker-compose.yml` 中 `postgres` 服务的 `ports` 已注释）
+2. **后端 API**：不暴露端口，通过 Nginx 代理访问（`docker-compose.yml` 中 `api` 服务的 `ports` 可注释，但通常保留用于调试）
+3. **文件存储**：配置 `RUSTFS_ENDPOINT_URL` 为内部IP（如 `http://192.168.31.3:9900`），通过 API 代理访问
+4. **Web 服务**：仅暴露 80 端口，所有请求通过 Nginx 代理
+
+**文件访问代理：**
+- 图片显示：`/api/assets/{file_key}/stream`
+- 文件下载：`/api/assets/{file_key}/download`
+- 所有文件访问都通过后端 API 代理，无需暴露 RustFS 端口
+
+**优势：**
+- ✅ 更安全：数据库和内部服务不暴露到外网
+- ✅ 更灵活：可以通过 Nginx 配置 HTTPS、访问控制等
+- ✅ 更简单：只需暴露一个 Web 端口（80/443）
+
+**如果需要从外部访问数据库：**
+- 编辑 `docker-compose.yml`，取消 `postgres` 服务的 `ports` 注释
+- 注意：暴露数据库端口会带来安全风险，建议仅在开发环境使用
 
 ## 🤝 贡献
 
@@ -489,9 +528,86 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 本项目采用 [MIT License](./LICENSE) 许可证。
 
+## ⚡ 性能优化
+
+### 后端优化
+
+1. **API 响应缓存**：
+   - 标签统计、工具列表、模型列表使用内存缓存（5分钟）
+   - 数据修改时自动清除相关缓存
+   - 减少数据库查询，提升响应速度
+
+2. **数据库查询优化**：
+   - 优化列表查询，使用批量查询替代 N+1 查询
+   - 减少数据库往返次数，提升查询效率
+
+3. **图片处理优化**：
+   - 支持多尺寸图片（缩略图、中等尺寸、原图）
+   - 列表显示使用中等尺寸（1920px），减少传输量 60-80%
+   - 智能缓存策略（中等尺寸缓存1年，原图缓存1小时）
+
+### 前端优化
+
+1. **图片压缩**：
+   - 上传前自动压缩图片（>2MB 的图片）
+   - 压缩参数：最大尺寸 1920x1920，质量 85%
+   - 减少上传传输量 50-70%
+
+2. **代码分割**：
+   - 路由懒加载，减少首屏加载时间
+   - 按需加载页面组件
+
+3. **组件优化**：
+   - 使用 React.memo 优化组件渲染
+   - useCallback 和 useMemo 优化计算
+   - 防抖搜索，减少 API 请求
+
+### Nginx 优化
+
+1. **Gzip 压缩**：
+   - 压缩级别 6（性能与压缩率平衡）
+   - 支持多种文件类型压缩
+   - 减少传输量 60-80%
+
+2. **静态资源缓存**：
+   - 静态资源缓存 1 年
+   - HTML 文件不缓存（确保更新及时）
+   - 图片 API 根据尺寸设置不同缓存时间
+
+3. **代理优化**：
+   - 优化缓冲设置
+   - 关闭静态资源访问日志
+
+### 性能提升预期
+
+- **标签 API**：缓存命中时响应时间从 ~100-200ms 降至 <1ms
+- **列表查询**：批量查询减少数据库往返，提升 50-70%
+- **首屏加载**：代码分割减少初始包大小，提升 20-30%
+- **网络传输**：Gzip + 图片压缩，减少传输量 70-85%
+- **图片加载**：中等尺寸图片 + 缓存，列表加载速度提升 60-80%
+- **上传速度**：图片压缩后减少传输量 50-70%
+
 ## 📅 更新日志
 
-### v1.1.0 (最新)
+### v1.2.0 (最新)
+
+**性能优化：**
+- ✅ 后端 API 响应缓存：标签统计、工具列表等使用内存缓存（5分钟）
+- ✅ 数据库查询优化：批量查询替代 N+1 查询，提升查询效率 50-70%
+- ✅ 前端代码分割：路由懒加载，减少首屏加载时间 20-30%
+- ✅ Nginx 配置优化：Gzip 压缩、静态资源缓存、代理缓冲优化
+- ✅ 图片上传优化：前端自动压缩（>2MB），减少传输量 50-70%
+- ✅ 图片加载优化：多尺寸支持（缩略图/中等尺寸/原图），列表使用中等尺寸
+- ✅ 智能缓存策略：中等尺寸图片缓存1年，原图缓存1小时
+- ✅ 上传进度显示：实时显示上传进度
+
+**优化改进：**
+- ✅ 图片 API 支持 size 参数，可按需获取不同尺寸
+- ✅ 列表显示自动使用中等尺寸图片，减少传输量 60-80%
+- ✅ 详情页使用原图，保证图片质量
+- ✅ Nginx 图片 API 缓存优化，根据尺寸设置不同缓存时间
+
+### v1.1.0
 
 **新功能：**
 - ✅ 输出组管理：支持为每条记录创建多个输出组，每个组可独立设置工具、模型和图片

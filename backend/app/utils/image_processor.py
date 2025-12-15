@@ -10,6 +10,73 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+def compress_image(
+    image_content: bytes,
+    max_width: int = 1920,
+    max_height: int = 1920,
+    quality: int = 85
+) -> bytes:
+    """
+    压缩图片（用于列表显示的中等尺寸）
+    
+    Args:
+        image_content: 原始图片内容（字节）
+        max_width: 最大宽度
+        max_height: 最大高度
+        quality: JPG 质量（1-100）
+        
+    Returns:
+        压缩后的图片内容（JPG 格式，字节）
+    """
+    try:
+        image = Image.open(io.BytesIO(image_content))
+        
+        # 对于 GIF 格式，只使用第一帧
+        if image.format == 'GIF':
+            try:
+                image.seek(0)
+            except EOFError:
+                pass
+        
+        # 转换为 RGB
+        if image.mode in ('RGBA', 'LA', 'P'):
+            rgb_image = Image.new('RGB', image.size, (255, 255, 255))
+            if image.mode == 'P':
+                if 'transparency' in image.info:
+                    image = image.convert('RGBA')
+                else:
+                    image = image.convert('RGBA')
+            if image.mode == 'RGBA':
+                rgb_image.paste(image, mask=image.split()[-1])
+            else:
+                rgb_image.paste(image)
+            image = rgb_image
+        elif image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # 计算新尺寸（保持宽高比）
+        width, height = image.size
+        if width > max_width or height > max_height:
+            ratio = min(max_width / width, max_height / height)
+            new_width = int(width * ratio)
+            new_height = int(height * ratio)
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # 保存为 JPG
+        output = io.BytesIO()
+        image.save(output, format='JPEG', quality=quality, optimize=True)
+        output.seek(0)
+        
+        compressed_bytes = output.read()
+        logger.info(f"图片压缩成功: {width}x{height} -> {image.size[0]}x{image.size[1]}, 大小: {len(compressed_bytes)} bytes")
+        
+        return compressed_bytes
+        
+    except Exception as e:
+        logger.error(f"图片压缩失败: {e}")
+        raise ValueError(f"无法压缩图片: {str(e)}")
+
+
 def generate_thumbnail(
     image_content: bytes,
     size: int = None,

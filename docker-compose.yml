@@ -2,6 +2,8 @@ version: '3.8'
 
 services:
   # 数据库服务（可选，如果使用外部数据库可以删除）
+  # 注意：默认不暴露端口到主机，数据库仅在 Docker 内部网络可访问
+  # 如果需要从外部访问数据库（如使用数据库管理工具），取消下面 ports 的注释
   postgres:
     image: postgres:15-alpine
     container_name: aigc_vault_db
@@ -9,8 +11,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: aigc_vault
-    ports:
-      - "5432:5432"
+    # 默认不暴露端口，数据库仅在容器内部网络可访问（更安全）
+    # 如果需要从外部访问数据库，取消下面的注释
+    # ports:
+    #   - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -43,8 +47,9 @@ services:
     
     # 也可以在这里直接设置环境变量（会覆盖 .env 文件中的值）
     environment:
-      # 数据库配置 - 如果使用上面的 postgres 服务，使用 postgres:5432
-      # 如果使用外部数据库，在 .env 文件中修改 DATABASE_URL
+      # 数据库配置 - 使用 postgres 服务名（Docker 内部网络），无需暴露端口
+      # 如果 .env 文件中已配置 DATABASE_URL，这里可以注释掉
+      # 重要：确保 .env 中的 DATABASE_URL 使用 postgres:5432 而不是 localhost:5432
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/aigc_vault
       
       # RustFS/S3 配置（建议在 .env 文件中配置）

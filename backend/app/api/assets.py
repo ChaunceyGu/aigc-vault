@@ -2,9 +2,10 @@
 资源相关 API
 处理文件访问和下载
 """
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+from typing import Optional
 import logging
 
 from app.database import get_db
@@ -55,6 +56,7 @@ async def get_file_url(
 @router.get("/{file_key:path}/stream")
 async def stream_file(
     file_key: str = Path(..., description="文件标识符（可能包含 / 字符）"),
+    size: Optional[str] = Query(None, description="图片尺寸：'thumb'（缩略图）、'medium'（中等尺寸）、'original'（原图，默认）"),
     db: Session = Depends(get_db)
 ):
     """
@@ -62,6 +64,7 @@ async def stream_file(
     通过后端 API 代理访问 RustFS，这样外网可以通过 web 端口访问
     
     - **file_key**: 文件标识符（可能包含 / 字符，如 2024/12/13/uuid-filename.jpg）
+    - **size**: 图片尺寸，可选值：'thumb'（缩略图）、'medium'（中等尺寸）、'original'（原图，默认）
     """
     try:
         # FastAPI 会自动解码路径参数，所以这里不需要手动解码
@@ -70,27 +73,80 @@ async def stream_file(
         if not asset:
             raise HTTPException(status_code=404, detail="文件不存在")
         
-        # 从 RustFS 下载文件
-        file_content = await rustfs_client.download_file(file_key)
-        if not file_content:
-            raise HTTPException(status_code=404, detail="文件不存在或无法访问")
+        # 根据 size 参数选择文件
+        if size == 'thumb':
+            # 使用缩略图（如果存在）
+            # 缩略图 key 格式：thumb_原文件名 或从原 key 推导
+            # 这里简化处理，直接使用原图生成缩略图
+            file_content = await rustfs_client.download_file(file_key)
+            if not file_content:
+                raise HTTPException(status_code=404, detail="文件不存在或无法访问")
+            
+            from app.utils.image_processor import generate_thumbnail
+            try:
+                file_content = generate_thumbnail(file_content)
+                content_type = "image/jpeg"
+            except Exception as e:
+                logger.warning(f"生成缩略图失败，使用原图: {e}")
+                # 如果生成缩略图失败，使用原图
+                content_type = "image/jpeg"
+                if asset.file_key.endswith('.png'):
+                    content_type = "image/png"
+                elif asset.file_key.endswith('.webp'):
+                    content_type = "image/webp"
+                elif asset.file_key.endswith('.gif'):
+                    content_type = "image/gif"
+        elif size == 'medium':
+            # 使用中等尺寸（压缩后的图片）
+            file_content = await rustfs_client.download_file(file_key)
+            if not file_content:
+                raise HTTPException(status_code=404, detail="文件不存在或无法访问")
+            
+            from app.utils.image_processor import compress_image
+            try:
+                file_content = compress_image(file_content, max_width=1920, max_height=1920, quality=85)
+                content_type = "image/jpeg"
+            except Exception as e:
+                logger.warning(f"压缩图片失败，使用原图: {e}")
+                # 如果压缩失败，使用原图
+                content_type = "image/jpeg"
+                if asset.file_key.endswith('.png'):
+                    content_type = "image/png"
+                elif asset.file_key.endswith('.webp'):
+                    content_type = "image/webp"
+                elif asset.file_key.endswith('.gif'):
+                    content_type = "image/gif"
+        else:
+            # 使用原图
+            file_content = await rustfs_client.download_file(file_key)
+            if not file_content:
+                raise HTTPException(status_code=404, detail="文件不存在或无法访问")
+            
+            # 确定内容类型
+            content_type = "image/jpeg"  # 默认
+            if asset.file_key.endswith('.png'):
+                content_type = "image/png"
+            elif asset.file_key.endswith('.webp'):
+                content_type = "image/webp"
+            elif asset.file_key.endswith('.gif'):
+                content_type = "image/gif"
         
-        # 确定内容类型
-        content_type = "image/jpeg"  # 默认
-        if asset.file_key.endswith('.png'):
-            content_type = "image/png"
-        elif asset.file_key.endswith('.webp'):
-            content_type = "image/webp"
-        elif asset.file_key.endswith('.gif'):
-            content_type = "image/gif"
+        # 返回流式响应（优化缓存策略和传输）
+        cache_max_age = 31536000 if size in ('thumb', 'medium') else 3600  # 缩略图和中等尺寸缓存1年，原图缓存1小时
         
-        # 返回流式响应
+        headers = {
+            "Cache-Control": f"public, max-age={cache_max_age}",
+            "ETag": f'"{hash(file_key + str(size))}"',  # ETag 包含 size 参数
+        }
+        
+        # 如果压缩了图片，添加 Content-Length 头（有助于浏览器优化）
+        if size in ('thumb', 'medium'):
+            headers["Content-Length"] = str(len(file_content))
+        
         return Response(
             content=file_content,
             media_type=content_type,
-            headers={
-                "Cache-Control": "public, max-age=3600",  # 缓存 1 小时
-            }
+            headers=headers
         )
         
     except HTTPException:

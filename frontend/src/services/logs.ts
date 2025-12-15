@@ -64,8 +64,13 @@ export interface LogListResponse {
 
 /**
  * 创建新记录
+ * @param params 创建参数
+ * @param onProgress 上传进度回调（可选）
  */
-export async function createLog(params: CreateLogParams) {
+export async function createLog(
+  params: CreateLogParams,
+  onProgress?: (progress: number) => void
+) {
   const formData = new FormData()
   
   formData.append('title', params.title)
@@ -111,11 +116,26 @@ export async function createLog(params: CreateLogParams) {
     })
   })
   
-  const response = await api.post('/logs/', formData, {
+  const config: {
+    headers: Record<string, string>
+    onUploadProgress?: (progressEvent: any) => void
+  } = {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
-  })
+  }
+  
+  // 添加上传进度回调
+  if (onProgress) {
+    config.onUploadProgress = (progressEvent: any) => {
+      if (progressEvent.total) {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        onProgress(percentCompleted)
+      }
+    }
+  }
+  
+  const response = await api.post('/logs/', formData, config)
   
   return response
 }

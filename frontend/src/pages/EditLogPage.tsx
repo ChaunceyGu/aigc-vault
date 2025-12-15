@@ -25,6 +25,7 @@ import { updateLog, getLogDetail, addOutputGroup, updateOutputGroup, deleteOutpu
 import { getTools, getModels } from '../services/tags'
 import { getRecentTools, saveRecentTool, getRecentModels, saveRecentModel } from '../utils/storage'
 import { isPasswordVerified } from '../utils/password'
+import { smartCompress } from '../utils/imageCompress'
 
 const { TextArea } = Input
 
@@ -152,14 +153,30 @@ const EditLogPage: React.FC = () => {
     
     setLoading(true)
     try {
-      const fileList = newGroupFiles
-        .filter(file => file.originFileObj)
-        .map(file => file.originFileObj!)
+      // 压缩图片
+      message.loading({ content: '正在压缩图片...', key: 'compress', duration: 0 })
+      const compressedFiles: File[] = []
+      for (const file of newGroupFiles) {
+        if (file.originFileObj) {
+          try {
+            const compressed = await smartCompress(file.originFileObj, {
+              maxWidth: 1920,
+              maxHeight: 1920,
+              quality: 0.85
+            })
+            compressedFiles.push(compressed)
+          } catch (error) {
+            console.warn('压缩失败，使用原文件:', error)
+            compressedFiles.push(file.originFileObj)
+          }
+        }
+      }
+      message.destroy('compress')
       
       await addOutputGroup(Number(id), {
         tools: newGroupTools.length > 0 ? newGroupTools : undefined,
         models: newGroupModels.length > 0 ? newGroupModels : undefined,
-        outputFiles: fileList,
+        outputFiles: compressedFiles,
       })
       
       // 保存最近使用的标签
@@ -260,10 +277,31 @@ const EditLogPage: React.FC = () => {
         return
       }
       
+      // 压缩新上传的图片
+      let compressedFiles: File[] | undefined = undefined
+      if (fileList.length > 0) {
+        message.loading({ content: '正在压缩图片...', key: 'compress-update', duration: 0 })
+        compressedFiles = []
+        for (const file of fileList) {
+          try {
+            const compressed = await smartCompress(file, {
+              maxWidth: 1920,
+              maxHeight: 1920,
+              quality: 0.85
+            })
+            compressedFiles.push(compressed)
+          } catch (error) {
+            console.warn('压缩失败，使用原文件:', error)
+            compressedFiles.push(file)
+          }
+        }
+        message.destroy('compress-update')
+      }
+      
       await updateOutputGroup(Number(id), groupId, {
         tools: editingGroupTools,
         models: editingGroupModels,
-        outputFiles: fileList.length > 0 ? fileList : undefined,  // 只有有新文件时才传递
+        outputFiles: compressedFiles,  // 使用压缩后的文件
         removeAssetIds: editingGroupRemoveAssetIds.length > 0 ? editingGroupRemoveAssetIds : undefined,  // 如果没有删除，不传递
       })
 
