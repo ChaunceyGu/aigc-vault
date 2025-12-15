@@ -22,6 +22,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def get_proxy_url(file_key: str) -> str:
+    """
+    生成通过 API 代理的文件访问 URL
+    这样外网可以通过 web 端口访问，而不需要暴露 RustFS 端口
+    
+    Args:
+        file_key: 文件标识符
+        
+    Returns:
+        通过 API 代理的 URL
+    """
+    return f"/api/assets/{file_key}/stream"
+
+
 @router.post("/")
 async def create_log(
     request: Request,
@@ -375,18 +389,12 @@ async def list_logs(
             preview_urls: list[str] = []
             
             # 获取前几张图片的 URL（最多4张，用于预览）
+            # 使用 API 代理 URL，这样外网可以通过 web 端口访问
             for asset in output_assets[:4]:
-                try:
-                    url = await rustfs_client.get_file_url(asset.file_key, expires_in=3600)
-                    preview_urls.append(url)
-                    if not cover_url:  # 第一张作为封面
-                        cover_url = url
-                except Exception as e:
-                    logger.warning(f"生成预签名 URL 失败，使用公开 URL: {e}")
-                    url = rustfs_client.get_public_url(asset.file_key)
-                    preview_urls.append(url)
-                    if not cover_url:
-                        cover_url = url
+                url = get_proxy_url(asset.file_key)
+                preview_urls.append(url)
+                if not cover_url:  # 第一张作为封面
+                    cover_url = url
             
             result.append({
                 "id": log.id,
@@ -436,11 +444,8 @@ async def get_log(log_id: int, db: Session = Depends(get_db)):
         input_assets = []
         for asset in assets:
             if asset.asset_type == 'input':
-                try:
-                    asset_url = await rustfs_client.get_file_url(asset.file_key, expires_in=3600)
-                except Exception as e:
-                    logger.warning(f"生成预签名 URL 失败，使用公开 URL: {e}")
-                    asset_url = rustfs_client.get_public_url(asset.file_key)
+                # 使用 API 代理 URL
+                asset_url = get_proxy_url(asset.file_key)
                 
                 input_assets.append({
                     "id": asset.id,
@@ -466,11 +471,8 @@ async def get_log(log_id: int, db: Session = Depends(get_db)):
             
             group_output_assets = []
             for asset in group_assets:
-                try:
-                    asset_url = await rustfs_client.get_file_url(asset.file_key, expires_in=3600)
-                except Exception as e:
-                    logger.warning(f"生成预签名 URL 失败，使用公开 URL: {e}")
-                    asset_url = rustfs_client.get_public_url(asset.file_key)
+                # 使用 API 代理 URL
+                asset_url = get_proxy_url(asset.file_key)
                 
                 group_output_assets.append({
                     "id": asset.id,
@@ -496,11 +498,8 @@ async def get_log(log_id: int, db: Session = Depends(get_db)):
             if all_output_assets:
                 default_group_assets = []
                 for asset in all_output_assets:
-                    try:
-                        asset_url = await rustfs_client.get_file_url(asset.file_key, expires_in=3600)
-                    except Exception as e:
-                        logger.warning(f"生成预签名 URL 失败，使用公开 URL: {e}")
-                        asset_url = rustfs_client.get_public_url(asset.file_key)
+                    # 使用 API 代理 URL
+                    asset_url = get_proxy_url(asset.file_key)
                     
                     default_group_assets.append({
                         "id": asset.id,

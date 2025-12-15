@@ -150,24 +150,20 @@ const LogDetailPage: React.FC = () => {
     }
   }
 
-  // 下载图片（优先使用file_key获取原始图片）
+  // 下载图片（使用后端API代理下载，支持外网访问）
   const downloadImage = async (url: string, filename: string, fileKey?: string) => {
     try {
-      // 如果有file_key，尝试从后端API获取原始图片URL
+      // 如果有file_key，使用下载接口（通过后端API代理）
       let downloadUrl = url
       if (fileKey) {
-        try {
-          const response = await fetch(`/api/assets/${encodeURIComponent(fileKey)}/url`)
-          if (response.ok) {
-            const data = await response.json()
-            downloadUrl = data.url || url
-          }
-        } catch (error) {
-          console.warn(`获取原始图片URL失败，使用默认URL: ${error}`)
-        }
+        // 使用后端API代理的下载接口，这样外网可以通过web端口下载
+        downloadUrl = `/api/assets/${encodeURIComponent(fileKey)}/download`
       }
       
       const response = await fetch(downloadUrl)
+      if (!response.ok) {
+        throw new Error(`下载失败: ${response.statusText}`)
+      }
       const blob = await response.blob()
       const downloadUrlObj = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -217,25 +213,20 @@ const LogDetailPage: React.FC = () => {
       const zip = new JSZip()
       const loadingMessage = message.loading('正在准备下载文件...', 0)
 
-      // 下载所有图片到 ZIP（使用file_key获取原始图片，如果没有file_key则使用url）
+      // 下载所有图片到 ZIP（使用后端API代理下载接口）
       for (let i = 0; i < allAssets.length; i++) {
         try {
           const asset = allAssets[i]
-          // 如果有file_key，使用API获取原始图片URL
+          // 如果有file_key，使用后端API代理的下载接口
           let downloadUrl = asset.url
           if (asset.file_key) {
-            try {
-              // 从后端API获取原始图片URL
-              const response = await fetch(`/api/assets/${encodeURIComponent(asset.file_key)}/url`)
-              if (response.ok) {
-                const data = await response.json()
-                downloadUrl = data.url || asset.url
-              }
-            } catch (error) {
-              console.warn(`获取原始图片URL失败，使用默认URL: ${error}`)
-            }
+            // 使用后端API代理的下载接口，这样外网可以通过web端口下载
+            downloadUrl = `/api/assets/${encodeURIComponent(asset.file_key)}/download`
           }
           const response = await fetch(downloadUrl)
+          if (!response.ok) {
+            throw new Error(`下载失败: ${response.statusText}`)
+          }
           const blob = await response.blob()
           zip.file(asset.filename, blob)
         } catch (error) {
@@ -910,10 +901,10 @@ const LogDetailPage: React.FC = () => {
               e.stopPropagation()
             }}
           >
-            {/* 图片 */}
-            <NSFWImage
+            {/* 图片 - 预览灯箱中直接显示原始图片，不再使用NSFWImage组件 */}
+            <img
               src={previewImage}
-              isNSFW={log?.is_nsfw && !showNsfw}
+              alt="预览"
               style={{ 
                 maxWidth: '90vw', 
                 maxHeight: '90vh',
@@ -921,7 +912,6 @@ const LogDetailPage: React.FC = () => {
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
                 objectFit: 'contain',
               }}
-              preview={false}
             />
             
             {/* 左侧切换按钮（多图时显示） */}
