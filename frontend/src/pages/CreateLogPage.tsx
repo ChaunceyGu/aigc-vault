@@ -172,7 +172,6 @@ const CreateLogPage: React.FC = () => {
       )
       message.destroy('compress-output')
 
-      setUploadProgress(0)
       message.loading({ content: '正在上传...', key: 'upload', duration: 0 })
       
       await createLog({
@@ -185,7 +184,6 @@ const CreateLogPage: React.FC = () => {
         outputGroups: outputGroupsData,
         isNsfw: isNsfw,
       }, (progress) => {
-        setUploadProgress(progress)
         message.loading({ 
           content: `正在上传... ${progress}%`, 
           key: 'upload', 
@@ -194,7 +192,6 @@ const CreateLogPage: React.FC = () => {
       })
       
       message.destroy('upload')
-      setUploadProgress(0)
 
       message.success({
         content: '记录创建成功！',
