@@ -2,6 +2,7 @@
  * 生成日志相关 API
  */
 import api from './api'
+import type { AxiosProgressEvent } from 'axios'
 
 export interface OutputGroup {
   tools: string[]
@@ -118,7 +119,7 @@ export async function createLog(
   
   const config: {
     headers: Record<string, string>
-    onUploadProgress?: (progressEvent: any) => void
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
   } = {
     headers: {
       'Content-Type': 'multipart/form-data',
@@ -127,7 +128,7 @@ export async function createLog(
   
   // 添加上传进度回调
   if (onProgress) {
-    config.onUploadProgress = (progressEvent: any) => {
+    config.onUploadProgress = (progressEvent: AxiosProgressEvent) => {
       if (progressEvent.total) {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
         onProgress(percentCompleted)
