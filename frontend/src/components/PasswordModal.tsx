@@ -17,13 +17,29 @@ const PasswordModal: React.FC<PasswordModalProps> = ({ open, onSuccess, onCancel
   const [loading, setLoading] = useState(false)
 
   const handleOk = async () => {
-    if (!password.trim()) {
-      message.warning('请输入密码')
-      return
-    }
-
     setLoading(true)
     try {
+      // 先检查是否需要密码
+      const { isPasswordRequired } = await import('../utils/password')
+      const required = await isPasswordRequired()
+      
+      // 如果不需要密码，直接通过
+      if (!required) {
+        setPasswordVerified()
+        message.success('验证成功')
+        setPassword('')
+        onSuccess()
+        setLoading(false)
+        return
+      }
+      
+      // 如果需要密码，验证输入
+      if (!password.trim()) {
+        message.warning('请输入密码')
+        setLoading(false)
+        return
+      }
+
       const isValid = await verifyPassword(password)
       if (isValid) {
         setPasswordVerified()

@@ -77,11 +77,12 @@ const EditLogPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  const loadDetail = async () => {
+  const loadDetail = async (forceRefresh = false) => {
     if (!id) return
     setLoadingDetail(true)
     try {
-      const data = await getLogDetail(Number(id))
+      // 强制刷新时添加时间戳参数来绕过缓存
+      const data = await getLogDetail(Number(id), forceRefresh)
       setLogDetail(data)
       setLogType(data.log_type as 'txt2img' | 'img2img')
       setIsNsfw(data.is_nsfw || false)
@@ -171,8 +172,15 @@ const EditLogPage: React.FC = () => {
       setNewGroupModels([])
       setNewGroupFiles([])
       setAddingOutputGroup(false)
-      // 重新加载详情
-      await loadDetail()
+      // 重新加载详情（强制刷新，确保获取最新数据）
+      await loadDetail(true)
+      // 滚动到新添加的输出组位置
+      setTimeout(() => {
+        const newGroupElement = document.querySelector(`[data-group-id]`)
+        if (newGroupElement) {
+          newGroupElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }
+      }, 300)
     } catch (error: unknown) {
       console.error('添加输出组失败:', error)
       const errorMessage = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '添加输出组失败，请重试'
@@ -224,20 +232,44 @@ const EditLogPage: React.FC = () => {
     
     setLoading(true)
     try {
+      // 提取新上传的文件
+      // 注意：Ant Design Upload组件的fileList中，文件可能是File对象或UploadFile对象
+      // 需要检查是否有originFileObj，如果没有则直接使用file本身
       const fileList = editingGroupNewFiles
-        .filter(file => file.originFileObj)
-        .map(file => file.originFileObj!)
+        .map(file => {
+          // 如果是File对象，直接使用
+          if (file instanceof File) {
+            return file
+          }
+          // 如果是UploadFile对象，检查originFileObj
+          if (file.originFileObj) {
+            return file.originFileObj
+          }
+          // 如果都没有，尝试使用file本身（可能是File对象）
+          return file as unknown as File
+        })
+        .filter((file): file is File => file instanceof File)
+      
+      console.log('更新输出组 - editingGroupNewFiles:', editingGroupNewFiles)
+      console.log('更新输出组 - 新文件数量:', fileList.length, '文件列表:', fileList.map(f => f.name))
+      console.log('更新输出组 - 删除的图片ID:', editingGroupRemoveAssetIds)
+      
+      if (fileList.length === 0 && editingGroupRemoveAssetIds.length === 0) {
+        message.warning('请至少添加新图片或删除现有图片')
+        setLoading(false)
+        return
+      }
       
       await updateOutputGroup(Number(id), groupId, {
         tools: editingGroupTools,
         models: editingGroupModels,
-        outputFiles: fileList,
-        removeAssetIds: editingGroupRemoveAssetIds,
+        outputFiles: fileList.length > 0 ? fileList : undefined,  // 只有有新文件时才传递
+        removeAssetIds: editingGroupRemoveAssetIds.length > 0 ? editingGroupRemoveAssetIds : undefined,  // 如果没有删除，不传递
       })
 
       message.success('输出组更新成功！')
-      // 重新加载详情
-      await loadDetail()
+      // 重新加载详情（强制刷新，确保获取最新数据）
+      await loadDetail(true)
       // 取消编辑状态
       cancelEditGroup()
     } catch (error: unknown) {
@@ -257,8 +289,8 @@ const EditLogPage: React.FC = () => {
     try {
       await deleteOutputGroup(Number(id), groupId)
       message.success('输出组删除成功！')
-      // 重新加载详情
-      await loadDetail()
+      // 重新加载详情（强制刷新，确保获取最新数据）
+      await loadDetail(true)
     } catch (error: unknown) {
       console.error('删除输出组失败:', error)
       const errorMessage = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '删除输出组失败，请重试'
@@ -276,10 +308,18 @@ const EditLogPage: React.FC = () => {
   }) => {
     if (!id) return
 
-    // 再次检查密码验证
+    // 再次检查密码验证（如果需要密码且未验证，则提示）
+    // 注意：如果未配置密码，isPasswordVerified可能返回false，但实际不需要密码
+    // 这里保持原逻辑，因为如果不需要密码，用户应该已经可以直接操作了
     if (!isPasswordVerified()) {
-      setShowPasswordModal(true)
-      return
+      // 检查是否需要密码，如果不需要则直接提交
+      const { isPasswordRequired } = await import('../utils/password')
+      const required = await isPasswordRequired()
+      if (required) {
+        setShowPasswordModal(true)
+        return
+      }
+      // 如果不需要密码，继续执行
     }
 
     setLoading(true)
@@ -522,29 +562,7 @@ const EditLogPage: React.FC = () => {
                   title={`输出组 ${index + 1}${isLegacy ? '（旧数据格式，无法编辑）' : ''}`}
                   extra={
                     <Space>
-                      {editingGroupId === group.id ? (
-                        <>
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => {
-                              if (!isLegacy && typeof group.id === 'number') {
-                                handleUpdateOutputGroup(group.id)
-                              }
-                            }}
-                            loading={loading}
-                            disabled={isLegacy}
-                          >
-                            保存
-                          </Button>
-                          <Button
-                            size="small"
-                            onClick={cancelEditGroup}
-                          >
-                            取消
-                          </Button>
-                        </>
-                      ) : (
+                      {editingGroupId !== group.id && (
                         <>
                           {!isLegacy && typeof group.id === 'number' && (
                             <>
@@ -694,6 +712,36 @@ const EditLogPage: React.FC = () => {
                           )}
                         </Upload>
                       </Form.Item>
+
+                      {/* 保存和取消按钮 - 放在表单底部，更显眼 */}
+                      <div style={{ 
+                        marginTop: 24, 
+                        paddingTop: 16, 
+                        borderTop: '1px solid #f0f0f0',
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 12,
+                      }}>
+                        <Button
+                          size="large"
+                          onClick={cancelEditGroup}
+                        >
+                          取消
+                        </Button>
+                        <Button
+                          type="primary"
+                          size="large"
+                          onClick={() => {
+                            if (!isLegacy && typeof group.id === 'number') {
+                              handleUpdateOutputGroup(group.id)
+                            }
+                          }}
+                          loading={loading}
+                          disabled={isLegacy}
+                        >
+                          保存
+                        </Button>
+                      </div>
                     </Space>
                   ) : (
                     <Space direction="vertical" style={{ width: '100%' }} size="middle">

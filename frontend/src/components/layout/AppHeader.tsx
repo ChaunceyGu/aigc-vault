@@ -1,9 +1,9 @@
 import { Layout, Button } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import PasswordModal from '../PasswordModal'
-import { isPasswordVerified } from '../../utils/password'
+import { isPasswordVerified, isPasswordRequired } from '../../utils/password'
 
 const { Header } = Layout
 
@@ -11,6 +11,29 @@ const AppHeader = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordRequired, setPasswordRequired] = useState<boolean | null>(null)
+
+  // 检查是否需要密码
+  useEffect(() => {
+    isPasswordRequired().then((required: boolean) => {
+      setPasswordRequired(required)
+    })
+  }, [])
+
+  const handleCreateClick = async () => {
+    // 如果不需要密码，直接跳转
+    if (passwordRequired === false) {
+      navigate('/create')
+      return
+    }
+    
+    // 如果需要密码，检查是否已验证
+    if (isPasswordVerified()) {
+      navigate('/create')
+    } else {
+      setShowPasswordModal(true)
+    }
+  }
 
   return (
     <Header 
@@ -39,13 +62,7 @@ const AppHeader = () => {
           type="primary"
           icon={<PlusOutlined />}
           size="large"
-          onClick={() => {
-            if (isPasswordVerified()) {
-              navigate('/create')
-            } else {
-              setShowPasswordModal(true)
-            }
-          }}
+          onClick={handleCreateClick}
           style={{
             background: 'rgba(255, 255, 255, 0.2)',
             border: '1px solid rgba(255, 255, 255, 0.3)',

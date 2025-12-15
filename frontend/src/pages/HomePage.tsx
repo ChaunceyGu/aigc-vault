@@ -14,7 +14,6 @@ import {
   Button,
   Row,
   Col,
-  Spin,
   message,
   Skeleton,
   Tooltip,
@@ -32,6 +31,8 @@ import NSFWImage from '../components/NSFWImage'
 const HomePage: React.FC = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  // 页面加载时的随机种子，用于瀑布流随机选择图片
+  const [pageLoadSeed] = useState(() => Math.floor(Math.random() * 1000000))
   const [logs, setLogs] = useState<LogItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -59,15 +60,31 @@ const HomePage: React.FC = () => {
   
   // 瀑布流列数
   const [waterfallColumns, setWaterfallColumns] = useState(3)
+  // 是否为移动端
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   
-  // 计算瀑布流列数（使用防抖优化）
+  // 计算瀑布流列数和移动端状态（使用防抖优化）
   useEffect(() => {
     let timeoutId: number | null = null
     
     const calculateColumns = () => {
       const width = window.innerWidth
-      // 增加阈值，让每列更宽，图片显示更大气
-      const maxCols = width > 1800 ? 5 : width > 1400 ? 4 : width > 1000 ? 3 : 2
+      // 更新移动端状态
+      setIsMobile(width <= 768)
+      
+      // 响应式列数：手机端1列，平板2列，桌面3-5列
+      let maxCols = 1
+      if (width > 1800) {
+        maxCols = 5
+      } else if (width > 1400) {
+        maxCols = 4
+      } else if (width > 1000) {
+        maxCols = 3
+      } else if (width > 768) {
+        maxCols = 2
+      } else {
+        maxCols = 1  // 手机端单列
+      }
       // 确保列数不超过图片数量，但至少为1
       const cols = Math.min(maxCols, Math.max(1, logs.length))
       setWaterfallColumns(cols)
@@ -99,6 +116,12 @@ const HomePage: React.FC = () => {
   // 标签数据
   const [tagStats, setTagStats] = useState<TagStats>({ tools: {}, models: {} })
 
+  // 首次加载时获取标签统计（不依赖其他状态）
+  useEffect(() => {
+    loadTagStats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])  // 只在组件挂载时执行一次
+
   useEffect(() => {
     // 检查是否需要刷新（从创建/编辑页面返回时）
     const shouldRefresh = sessionStorage.getItem('refreshHomePage')
@@ -108,7 +131,6 @@ const HomePage: React.FC = () => {
       loadTagStats(true) // 强制刷新标签统计
     } else {
       loadLogs()
-      loadTagStats()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, search, logType, selectedTool, selectedModel, sortBy])
@@ -219,9 +241,27 @@ const HomePage: React.FC = () => {
     }
   }
 
+  // 搜索防抖：延迟300ms执行搜索，避免频繁请求
+  const [searchInput, setSearchInput] = useState('')
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== search) {
+        setSearch(searchInput)
+        setPage(1)
+      }
+    }, 300)
+    
+    return () => clearTimeout(timer)
+  }, [searchInput])  // 当searchInput变化时触发防抖
+  
   const handleSearch = (value: string) => {
-    setSearch(value)
-    setPage(1)
+    setSearchInput(value)
+    if (!value) {
+      // 如果清空搜索，立即执行
+      setSearch('')
+      setPage(1)
+    }
   }
 
   const handleCardClick = useCallback((logId: number) => {
@@ -355,71 +395,75 @@ const HomePage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: 1800, margin: '0 auto', padding: '0 24px' }}>
+    <div style={{ 
+      maxWidth: 1800, 
+      margin: '0 auto', 
+      padding: isMobile ? '0 12px' : '0 24px'  // 手机端内边距更小
+    }}>
       {/* 搜索和筛选栏 */}
       <Card 
         style={{ 
-          marginBottom: 24,
-          borderRadius: 8,
+          marginBottom: isMobile ? 16 : 24,
+          borderRadius: isMobile ? 6 : 8,
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
         }}
+        bodyStyle={{ padding: isMobile ? '12px' : '16px' }}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Row gutter={[16, 16]}>
+          <Row gutter={isMobile ? [8, 8] : [16, 16]}>
             <Col xs={24} sm={12} md={10}>
               <Space.Compact style={{ width: '100%' }}>
                 <Input
-                  placeholder="搜索记录标题或提示词（按 / 键快速聚焦）"
+                  placeholder={isMobile ? "搜索标题或提示词" : "搜索记录标题或提示词（按 / 键快速聚焦）"}
                   allowClear
                   onChange={(e) => {
                     if (!e.target.value) setSearch('')
                   }}
                   onPressEnter={(e) => handleSearch((e.target as HTMLInputElement).value)}
-                  size="large"
+                  size={isMobile ? "middle" : "large"}
                   style={{ flex: 1 }}
                 />
                 <Button 
                   icon={<SearchOutlined />} 
                   onClick={() => {
-                    const input = document.querySelector('input[placeholder*="搜索"]') as HTMLInputElement
-                    if (input) handleSearch(input.value)
+                    handleSearch(searchInput)
                   }}
-                  size="large"
+                  size={isMobile ? "middle" : "large"}
                   type="primary"
                 >
-                  搜索
+                  {isMobile ? '' : '搜索'}
                 </Button>
               </Space.Compact>
             </Col>
             <Col xs={12} sm={6} md={4}>
               <Select
                 style={{ width: '100%' }}
-                placeholder="生成类型"
+                placeholder={isMobile ? "类型" : "生成类型"}
                 allowClear
                 value={logType}
                 onChange={setLogType}
-                size="large"
+                size={isMobile ? "middle" : "large"}
               >
-                <Select.Option value="txt2img">文生图（Text to Image）</Select.Option>
-                <Select.Option value="img2img">图生图（Image to Image）</Select.Option>
+                <Select.Option value="txt2img">{isMobile ? "文生图" : "文生图（Text to Image）"}</Select.Option>
+                <Select.Option value="img2img">{isMobile ? "图生图" : "图生图（Image to Image）"}</Select.Option>
               </Select>
             </Col>
             <Col xs={12} sm={6} md={5}>
               <Select
                 style={{ width: '100%' }}
-                placeholder="筛选工具（如：Stable Diffusion WebUI）"
+                placeholder={isMobile ? "工具" : "筛选工具（如：Stable Diffusion WebUI）"}
                 allowClear
                 value={selectedTool}
                 onChange={setSelectedTool}
                 showSearch
-                size="large"
+                size={isMobile ? "middle" : "large"}
                 filterOption={(input, option) =>
                   String(option?.label || option?.value || '').toLowerCase().includes(input.toLowerCase())
                 }
               >
                 {Object.keys(tagStats.tools).map(tool => (
                   <Select.Option key={tool} value={tool}>
-                    {tool}（{tagStats.tools[tool]} 条记录）
+                    {tool}{!isMobile && `（${tagStats.tools[tool]} 条记录）`}
                   </Select.Option>
                 ))}
               </Select>
@@ -427,47 +471,47 @@ const HomePage: React.FC = () => {
             <Col xs={24} sm={12} md={5}>
               <Select
                 style={{ width: '100%' }}
-                placeholder="筛选模型（如：SDXL 1.0）"
+                placeholder={isMobile ? "模型" : "筛选模型（如：SDXL 1.0）"}
                 allowClear
                 value={selectedModel}
                 onChange={setSelectedModel}
                 showSearch
-                size="large"
+                size={isMobile ? "middle" : "large"}
                 filterOption={(input, option) =>
                   String(option?.label || option?.value || '').toLowerCase().includes(input.toLowerCase())
                 }
               >
                 {Object.keys(tagStats.models).map(model => (
                   <Select.Option key={model} value={model}>
-                    {model}（{tagStats.models[model]} 条记录）
+                    {model}{!isMobile && `（${tagStats.models[model]} 条记录）`}
                   </Select.Option>
                 ))}
               </Select>
             </Col>
           </Row>
           
-          <Row gutter={[16, 16]} align="middle">
-            <Col flex="auto">
+          <Row gutter={isMobile ? [8, 8] : [16, 16]} align="middle">
+            <Col flex="auto" xs={24} sm={24} md="auto">
               {total > 0 && (
-                <span style={{ color: '#666', fontSize: 14 }}>
+                <span style={{ color: '#666', fontSize: isMobile ? 12 : 14 }}>
                   共找到 <strong style={{ color: '#1890ff' }}>{total}</strong> 条记录
                   {selectionMode && selectedIds.length > 0 && (
-                    <span style={{ marginLeft: 12, color: '#1890ff', fontWeight: 600 }}>
-                      已选择 <strong style={{ fontSize: 16 }}>{selectedIds.length}</strong> 条
+                    <span style={{ marginLeft: isMobile ? 8 : 12, color: '#1890ff', fontWeight: 600 }}>
+                      已选择 <strong style={{ fontSize: isMobile ? 14 : 16 }}>{selectedIds.length}</strong> 条
                     </span>
                   )}
                 </span>
               )}
             </Col>
-            <Col>
-              <Space wrap>
+            <Col xs={24} sm={24} md="auto">
+              <Space wrap size={isMobile ? "small" : "middle"}>
                 {!selectionMode ? (
                   <>
                     <Select
                       value={sortBy}
                       onChange={setSortBy}
-                      style={{ width: 120 }}
-                      size="large"
+                      style={{ width: isMobile ? 100 : 120 }}
+                      size={isMobile ? "middle" : "large"}
                       suffixIcon={<SortAscendingOutlined />}
                     >
                       <Select.Option value="time_desc">最新优先</Select.Option>
@@ -479,23 +523,23 @@ const HomePage: React.FC = () => {
                       <Button
                         icon={viewMode === 'grid' ? <UnorderedListOutlined /> : <AppstoreOutlined />}
                         onClick={() => handleViewModeChange(viewMode === 'grid' ? 'waterfall' : 'grid')}
-                        size="large"
+                        size={isMobile ? "middle" : "large"}
                       />
                     </Tooltip>
                     <Button
                       icon={<CheckSquareOutlined />}
                       onClick={toggleSelectionMode}
-                      size="large"
+                      size={isMobile ? "middle" : "large"}
                     >
-                      批量选择
+                      {isMobile ? '选择' : '批量选择'}
                     </Button>
                     <Button 
                       icon={<ReloadOutlined />} 
                       onClick={handleRefresh}
                       loading={loading}
-                      size="large"
+                      size={isMobile ? "middle" : "large"}
                     >
-                      刷新
+                      {isMobile ? '' : '刷新'}
                     </Button>
                   </>
                 ) : (
@@ -631,23 +675,14 @@ const HomePage: React.FC = () => {
                                   src={url}
                                   alt={`${log.title} - ${idx + 1}`}
                                   isNSFW={log.is_nsfw || false}
+                                  disableModal={true}  // 网格视图中禁用Modal，点击卡片直接进入详情页
                                   style={{ 
                                     width: '100%', 
                                     height: '100%', 
                                     objectFit: 'cover',
                                   }}
                                   preview={false}
-                                  placeholder={
-                                    <div className="image-wrapper" style={{ 
-                                      width: '100%', 
-                                      height: '100%',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                    }}>
-                                      <Spin size="small" />
-                                    </div>
-                                  }
+                                  loading="lazy"
                                 />
                               </div>
                             ))}
@@ -1074,12 +1109,20 @@ const HomePage: React.FC = () => {
             style={{
               width: '100%',
               columnCount: waterfallColumns,
-              columnGap: 20,
+              columnGap: isMobile ? 12 : 20,  // 手机端间距更小
               columnFill: 'balance',
             }}
           >
             {logs.map((log, index) => {
-              const coverImage = log.cover_url || (log.preview_urls && log.preview_urls[0])
+              // 随机选择图片：如果有 preview_urls，随机选择一张；否则使用 cover_url
+              // 使用页面加载时的固定随机种子，确保每次刷新都不同
+              let coverImage = log.cover_url
+              if (!coverImage && log.preview_urls && log.preview_urls.length > 0) {
+                // 使用 log.id、index 和页面加载时的随机种子组合
+                // 这样每次页面加载时，每个记录都会显示不同的随机图片
+                const seed = Math.floor((log.id * 137 + index * 97 + pageLoadSeed) % log.preview_urls.length)
+                coverImage = log.preview_urls[seed]
+              }
               const isSelected = selectedIds.includes(log.id)
               
               return (
@@ -1095,11 +1138,11 @@ const HomePage: React.FC = () => {
                   style={{
                     breakInside: 'avoid',
                     pageBreakInside: 'avoid',
-                    marginBottom: 16,
-                    borderRadius: 12,
+                    marginBottom: isMobile ? 12 : 16,  // 手机端间距更小
+                    borderRadius: isMobile ? 8 : 12,  // 手机端圆角更小
                     overflow: 'hidden',
                     border: isSelected 
-                      ? '3px solid #1890ff' 
+                      ? (isMobile ? '2px solid #1890ff' : '3px solid #1890ff')
                       : selectionMode
                         ? '2px solid #e8e8e8'
                         : '2px solid transparent',
@@ -1115,7 +1158,7 @@ const HomePage: React.FC = () => {
                     width: '100%',
                     cursor: 'pointer',
                     boxSizing: 'border-box',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+                    boxShadow: isMobile ? '0 1px 4px rgba(0, 0, 0, 0.06)' : '0 2px 8px rgba(0, 0, 0, 0.06)',
                     willChange: selectionMode ? 'auto' : 'transform, box-shadow',
                   }}
                   className="waterfall-card"
@@ -1158,9 +1201,9 @@ const HomePage: React.FC = () => {
                       >
                         <div
                           style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 8,
+                            width: isMobile ? 36 : 32,  // 手机端按钮更大，方便点击
+                            height: isMobile ? 36 : 32,
+                            borderRadius: isMobile ? 6 : 8,
                             background: isSelected ? '#1890ff' : 'rgba(255, 255, 255, 0.95)',
                             border: isSelected ? '2px solid #1890ff' : '2px solid rgba(0, 0, 0, 0.2)',
                             display: 'flex',
@@ -1197,6 +1240,7 @@ const HomePage: React.FC = () => {
                       src={coverImage}
                       alt={log.title}
                       isNSFW={log.is_nsfw || false}
+                      disableModal={true}  // 瀑布流中禁用Modal，点击直接跳转到详情页
                       style={{
                         width: '100%',
                         height: 'auto',

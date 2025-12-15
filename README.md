@@ -6,14 +6,19 @@
 
 - 📝 **生成记录管理**：支持 txt2img（文生图）和 img2img（图生图）两种模式
 - 🏷️ **智能标签系统**：支持工具标签（如 Stable Diffusion WebUI、ComfyUI）和模型标签（如 SDXL、LoRA），自动补全和最近使用
-- 🔍 **智能搜索**：支持标题模糊搜索、标签筛选、类型筛选
+- 🔍 **智能搜索**：支持标题模糊搜索、标签筛选、类型筛选，搜索防抖优化
 - 🖼️ **图片管理**：自动生成缩略图，支持多图片上传和管理，支持批量下载（ZIP）
-- 📊 **详情查看**：全屏预览、轮播切换、参数完整展示
+- 📊 **详情查看**：全屏预览、轮播切换、参数完整展示，支持键盘快捷键（ESC关闭、方向键切换）
 - ✏️ **编辑删除**：支持记录的编辑和删除操作，密码保护
+- 📦 **输出组管理**：支持为每条记录创建多个输出组，每个组可独立设置工具、模型和图片
 - 📥 **批量操作**：支持批量下载、批量删除
-- 🎨 **视图切换**：支持网格视图和瀑布流视图
+- 🎨 **视图切换**：支持网格视图和瀑布流视图，瀑布流随机展示图片
 - 🔒 **密码保护**：创建/编辑记录需要密码验证
-- 🚫 **NSFW 内容管理**：支持标记敏感内容，自动打码保护
+- 🚫 **NSFW 内容管理**：支持标记敏感内容，自动打码保护，统一灯箱预览体验
+- 🌐 **外网访问支持**：通过API代理实现文件访问，无需暴露内部端口
+- ⚡ **性能优化**：图片懒加载、防抖搜索、智能缓存、组件优化
+- 🔄 **CI/CD 集成**：GitHub Actions 自动构建和推送 Docker 镜像
+- 🔐 **安全扫描**：集成 Trivy 进行容器漏洞扫描
 
 ## 🛠️ 技术栈
 
@@ -179,17 +184,31 @@ python scripts/verify_rustfs.py
 
 ### 主要 API 端点
 
+**记录管理：**
 - `GET /api/logs` - 获取生成记录列表（支持搜索、筛选、分页）
 - `POST /api/logs` - 创建新的生成记录
 - `GET /api/logs/{id}` - 获取记录详情
 - `PUT /api/logs/{id}` - 更新记录
 - `DELETE /api/logs/{id}` - 删除记录
-- `GET /api/assets/{file_key}` - 获取图片资源
-- `GET /api/assets/{file_key}/url` - 获取原始图片 URL
+
+**输出组管理：**
+- `POST /api/logs/{id}/output-groups` - 为记录添加新的输出组
+- `PUT /api/logs/{id}/output-groups/{group_id}` - 更新输出组（修改工具、模型，添加或删除图片）
+- `DELETE /api/logs/{id}/output-groups/{group_id}` - 删除输出组
+
+**资源管理：**
+- `GET /api/assets/{file_key}/stream` - 流式传输图片（用于显示）
+- `GET /api/assets/{file_key}/download` - 下载图片文件
+- `GET /api/assets/{file_key}/url` - 获取图片代理 URL
+
+**标签管理：**
 - `GET /api/tags/tools` - 获取所有工具标签
 - `GET /api/tags/models` - 获取所有模型标签
-- `GET /api/tags/stats` - 获取标签统计信息
+- `GET /api/tags/stats` - 获取标签统计信息（用于筛选器）
+
+**配置：**
 - `GET /api/config/edit-password` - 获取编辑密码配置
+- `GET /api/config/version` - 获取应用版本信息
 
 ## 🔧 配置说明
 
@@ -335,11 +354,69 @@ docker run -d \
 # 创建 Access Key 和 Secret Key
 ```
 
+## 🔄 CI/CD 部署
+
+项目已集成 GitHub Actions，支持自动构建和推送 Docker 镜像。
+
+### 配置 GitHub Actions
+
+1. **设置 Docker Hub 密钥**：
+   - 在 GitHub 仓库设置中添加以下 Secrets：
+     - `DOCKER_USERNAME`：Docker Hub 用户名
+     - `DOCKER_PASSWORD`：Docker Hub 访问令牌
+
+2. **工作流触发**：
+   - 推送到 `main`/`master` 分支：构建并推送 `latest` 标签
+   - 推送版本标签（如 `v1.1.0`）：构建并推送语义化版本标签
+   - Pull Request：仅运行代码质量检查
+
+3. **自动构建**：
+   - 代码质量检查（ESLint、TypeScript、flake8）
+   - 构建 Docker 镜像
+   - 安全扫描（Trivy）
+   - 推送到 Docker Hub
+
+详细配置请参考 `.github/workflows/docker-build.yml`。
+
+## 🔄 CI/CD 部署
+
+项目已集成 GitHub Actions，支持自动构建和推送 Docker 镜像。
+
+### 配置 GitHub Actions
+
+1. **设置 Docker Hub 密钥**：
+   - 在 GitHub 仓库设置中添加以下 Secrets：
+     - `DOCKER_USERNAME`：Docker Hub 用户名
+     - `DOCKER_PASSWORD`：Docker Hub 访问令牌
+
+2. **工作流触发**：
+   - 推送到 `main`/`master` 分支：构建并推送 `latest` 标签
+   - 推送版本标签（如 `v1.1.0`）：构建并推送语义化版本标签（`v1.1.0`、`v1.1`、`v1`、`latest`）
+   - Pull Request：仅运行代码质量检查
+
+3. **自动构建流程**：
+   - 代码质量检查（ESLint、TypeScript、flake8）
+   - 构建 Docker 镜像
+   - 安全扫描（Trivy）
+   - 推送到 Docker Hub
+
+详细配置请参考 `.github/workflows/docker-build.yml`。
+
 ## 📝 开发指南
 
 ### 数据库迁移
 
 数据库初始化脚本位于 `migrations/init.sql`，首次部署时会自动执行。
+
+**输出组功能**：
+- 支持为每条记录创建多个输出组
+- 每个输出组可独立设置工具、模型和图片
+- 兼容旧数据格式（自动迁移）
+
+**输出组功能**：
+- 支持为每条记录创建多个输出组
+- 每个输出组可独立设置工具、模型和图片
+- 兼容旧数据格式（自动迁移）
 
 ### 项目脚本
 
@@ -387,9 +464,19 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ### NSFW 内容管理
 
 - 创建记录时可以标记为 NSFW 内容
-- NSFW 图片会自动打码（模糊处理）
+- NSFW 图片会自动打码（模糊处理），简洁的水印提示
 - 详情页可以切换显示/隐藏 NSFW 内容
 - 下载时会自动获取原始图片（未打码版本）
+- 统一的灯箱预览体验，支持点击遮罩层关闭
+
+### 外网访问配置
+
+系统支持通过API代理访问文件，无需暴露内部RustFS端口：
+
+1. 配置 `RUSTFS_ENDPOINT_URL` 为内部IP（如 `http://192.168.31.3:9900`）
+2. 只暴露 Docker 的 web 端口（80端口）
+3. 所有图片访问和下载都通过 `/api/assets/{file_key}/stream` 和 `/api/assets/{file_key}/download` 代理
+4. 支持外网访问，无需暴露8000端口和9900端口
 
 ## 🤝 贡献
 
@@ -404,8 +491,33 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 📅 更新日志
 
-### 最新更新
+### v1.1.0 (最新)
 
+**新功能：**
+- ✅ 输出组管理：支持为每条记录创建多个输出组，每个组可独立设置工具、模型和图片
+- ✅ 外网访问支持：通过API代理实现文件访问，无需暴露内部RustFS端口
+- ✅ 版本信息同步：前后端版本信息同步显示，支持语义化版本
+- ✅ GitHub Actions CI/CD：自动构建和推送 Docker 镜像到 Docker Hub
+- ✅ 安全扫描：集成 Trivy 进行容器漏洞扫描并上报到 GitHub Security
+
+**优化改进：**
+- ✅ 统一图片预览体验：普通图片和NSFW图片使用相同的灯箱样式
+- ✅ 搜索防抖优化：减少不必要的API请求
+- ✅ 图片加载优化：添加重试机制，提升加载成功率
+- ✅ 组件性能优化：使用 React.memo 优化渲染性能
+- ✅ 瀑布流随机展示：每次刷新显示不同的随机图片
+- ✅ 移动端体验优化：响应式布局，优化手机端交互
+- ✅ 图片加载体验：Shimmer 骨架屏、淡入动画、错误处理
+
+**Bug修复：**
+- ✅ 修复NSFW图片需要关闭两次的问题
+- ✅ 修复编辑页面新增图片不显示的问题
+- ✅ 修复筛选栏无法读取工具和模型的问题
+- ✅ 修复图片在外网无法访问的问题
+
+### v1.0.0
+
+**基础功能：**
 - ✅ 密码保护功能（创建/编辑记录）
 - ✅ NSFW 内容管理（自动打码、显示/隐藏切换）
 - ✅ 优化的标签输入组件（自动补全、快速添加）

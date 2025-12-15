@@ -22,7 +22,7 @@ import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOut
 import { getLogDetail, deleteLog, type LogDetail } from '../services/logs'
 import NSFWImage from '../components/NSFWImage'
 import PasswordModal from '../components/PasswordModal'
-import { isPasswordVerified } from '../utils/password'
+import { isPasswordVerified, isPasswordRequired } from '../utils/password'
 
 const { Title, Text } = Typography
 
@@ -38,6 +38,14 @@ const LogDetailPage: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
   const [showNsfw, setShowNsfw] = useState(false)  // 控制NSFW内容显示
+  const [passwordRequired, setPasswordRequired] = useState<boolean | null>(null)
+
+  // 检查是否需要密码
+  useEffect(() => {
+    isPasswordRequired().then(required => {
+      setPasswordRequired(required)
+    })
+  }, [])
 
   useEffect(() => {
     if (id) {
@@ -354,7 +362,14 @@ const LogDetailPage: React.FC = () => {
           )}
           <Button
             icon={<EditOutlined />}
-            onClick={() => {
+            onClick={async () => {
+              // 如果不需要密码，直接跳转
+              if (passwordRequired === false) {
+                navigate(`/logs/${id}/edit`)
+                return
+              }
+              
+              // 如果需要密码，检查是否已验证
               if (isPasswordVerified()) {
                 navigate(`/logs/${id}/edit`)
               } else {
@@ -597,17 +612,23 @@ const LogDetailPage: React.FC = () => {
                               overflow: 'hidden',
                               borderRadius: 10,
                               background: '#f0f0f0',
-                              cursor: 'pointer',
+                              cursor: (log.is_nsfw && !showNsfw) ? 'default' : 'pointer',  // NSFW且未显示时，禁用点击
                               marginBottom: 8,
                               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                               border: '2px solid transparent',
                               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                             }}
-                            onClick={() => handleImageClick(
-                              asset.url,
-                              log.input_assets.map(a => a.url),
-                              index
-                            )}
+                            onClick={(e) => {
+                              // 如果是NSFW且未显示，不触发预览灯箱（由NSFWImage组件自己处理）
+                              if (log.is_nsfw && !showNsfw) {
+                                return
+                              }
+                              handleImageClick(
+                                asset.url,
+                                log.input_assets.map(a => a.url),
+                                index
+                              )
+                            }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.borderColor = '#1890ff'
                               e.currentTarget.style.transform = 'scale(1.03)'
@@ -770,17 +791,23 @@ const LogDetailPage: React.FC = () => {
                                   overflow: 'hidden',
                                   borderRadius: 10,
                                   background: '#f0f0f0',
-                                  cursor: 'pointer',
+                                  cursor: (log.is_nsfw && !showNsfw) ? 'default' : 'pointer',  // NSFW且未显示时，禁用点击
                                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                   border: '2px solid transparent',
                                   boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                                   position: 'relative',
                                 }}
-                                onClick={() => handleImageClick(
-                                  asset.url,
-                                  allImages,
-                                  currentGlobalIndex
-                                )}
+                                onClick={(e) => {
+                                  // 如果是NSFW且未显示，不触发预览灯箱（由NSFWImage组件自己处理）
+                                  if (log.is_nsfw && !showNsfw) {
+                                    return
+                                  }
+                                  handleImageClick(
+                                    asset.url,
+                                    allImages,
+                                    currentGlobalIndex
+                                  )
+                                }}
                                 onMouseEnter={(e) => {
                                   e.currentTarget.style.borderColor = '#1890ff'
                                   e.currentTarget.style.transform = 'scale(1.03)'
@@ -889,12 +916,11 @@ const LogDetailPage: React.FC = () => {
               position: 'relative',
               maxWidth: '90vw',
               maxHeight: '90vh',
-              width: '100%',
-              height: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               animation: 'fadeIn 0.3s ease-out',
+              pointerEvents: 'auto',  // 确保可以接收点击事件
             }}
             onClick={(e) => {
               // 阻止冒泡，防止点击图片区域关闭弹窗

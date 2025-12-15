@@ -146,9 +146,12 @@ export async function getLogList(params: {
 
 /**
  * 获取记录详情
+ * @param logId 记录ID
+ * @param forceRefresh 是否强制刷新（添加时间戳参数绕过缓存）
  */
-export async function getLogDetail(logId: number): Promise<LogDetail> {
-  const response = await api.get<LogDetail>(`/logs/${logId}`)
+export async function getLogDetail(logId: number, forceRefresh = false): Promise<LogDetail> {
+  const url = forceRefresh ? `/logs/${logId}?t=${Date.now()}` : `/logs/${logId}`
+  const response = await api.get<LogDetail>(url)
   return response as unknown as LogDetail
 }
 
@@ -262,6 +265,8 @@ export async function updateOutputGroup(
     formData.append('remove_asset_ids', JSON.stringify(params.removeAssetIds))
   }
   
+  // 传递output_files参数
+  // 只有当有新文件时才传递，否则不传递（后端会使用默认值空数组）
   if (params.outputFiles && params.outputFiles.length > 0) {
     params.outputFiles.forEach(file => {
       formData.append('output_files', file)
