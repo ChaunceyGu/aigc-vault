@@ -42,7 +42,7 @@ export function saveAuth(token: string, user: User): void {
   localStorage.setItem(USER_KEY, JSON.stringify(user))
   
   // 调试日志
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.DEV) {
     console.debug('保存 token:', cleanToken.substring(0, 20) + '...', '长度:', cleanToken.length)
   }
 }

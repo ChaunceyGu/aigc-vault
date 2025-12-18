@@ -143,6 +143,10 @@ const RoleManagePage: React.FC = () => {
         await updateRole(editingRole.id, updateData)
         message.success('更新成功')
       } else {
+        if (!values.name) {
+          message.error('角色名称不能为空')
+          return
+        }
         const createData: RoleCreateRequest = {
           name: values.name,
           display_name: values.display_name,

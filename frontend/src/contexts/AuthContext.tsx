@@ -1,7 +1,7 @@
 /**
  * 用户认证 Context
  */
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User, login as apiLogin, register as apiRegister, logout as apiLogout, getCurrentUser, getUser, getToken, saveAuth } from '../services/auth'
 
 interface AuthContextType {

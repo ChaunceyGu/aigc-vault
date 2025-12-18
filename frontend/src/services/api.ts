@@ -1,7 +1,7 @@
 /**
  * API 服务配置
  */
-import axios from 'axios'
+import axios, { AxiosInstance } from 'axios'
 
 // 使用相对路径，通过 nginx 代理到后端
 const api = axios.create({
@@ -12,6 +12,17 @@ const api = axios.create({
   },
 })
 
+// 类型声明：由于响应拦截器返回 response.data，所以 API 方法直接返回数据而不是 AxiosResponse
+interface ApiInstance {
+  get<T = unknown>(url: string, config?: unknown): Promise<T>
+  post<T = unknown>(url: string, data?: unknown, config?: unknown): Promise<T>
+  put<T = unknown>(url: string, data?: unknown, config?: unknown): Promise<T>
+  delete<T = unknown>(url: string, config?: unknown): Promise<T>
+  patch<T = unknown>(url: string, data?: unknown, config?: unknown): Promise<T>
+}
+
+const typedApi = api as unknown as ApiInstance & AxiosInstance
+
 // 请求拦截器
 api.interceptors.request.use(
   (config) => {
@@ -20,12 +31,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
       // 调试：检查 token 是否正确添加
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.debug('API Request:', config.url, 'Token:', token.substring(0, 20) + '...')
       }
     } else {
       // 调试：检查哪些请求没有 token
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.debug('API Request without token:', config.url)
       }
     }
@@ -101,5 +112,5 @@ api.interceptors.response.use(
   }
 )
 
-export default api
+export default typedApi
 
