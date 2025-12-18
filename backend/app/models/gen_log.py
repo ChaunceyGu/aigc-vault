@@ -24,6 +24,7 @@ class GenLog(Base):
     # 关联关系
     assets = relationship("LogAsset", back_populates="log", cascade="all, delete-orphan")
     output_groups = relationship("OutputGroup", back_populates="log", cascade="all, delete-orphan")
+    favorites = relationship("Favorite", back_populates="log", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<GenLog(id={self.id}, title='{self.title}', type='{self.log_type}')>"

@@ -13,9 +13,11 @@ from app.database import get_db
 from app.models.gen_log import GenLog
 from app.models.log_asset import LogAsset
 from app.models.output_group import OutputGroup
+from app.models.user import User
 from app.services.rustfs_client import rustfs_client
 from app.utils.image_processor import generate_thumbnail, validate_image
 from app.utils.cache import cache
+from app.utils.auth import require_permission, get_current_user_optional
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,7 @@ async def create_log(
     input_notes: Optional[str] = Form(None, description="输入图片备注，JSON 格式：{'filename1': 'note1', ...}"),
     output_groups: Optional[str] = Form(None, description="输出组JSON，格式：[{'tools': ['tool1'], 'models': ['model1'], 'file_count': 2}, ...]，文件按组顺序排列"),
     output_files: List[UploadFile] = File(default=[]),  # 改为可选，因为可能通过output_groups传递
+    current_user: User = Depends(require_permission("log.create")),
     db: Session = Depends(get_db)
 ):
     """
@@ -579,6 +582,7 @@ async def update_log(
     prompt: Optional[str] = Form(None),
     params_note: Optional[str] = Form(None),
     is_nsfw: Optional[str] = Form(None, description="是否为NSFW内容，'true' 或 'false'"),
+    current_user: User = Depends(require_permission("log.edit")),
     db: Session = Depends(get_db)
 ):
     """
@@ -638,7 +642,11 @@ async def update_log(
 
 
 @router.delete("/{log_id}")
-async def delete_log(log_id: int, db: Session = Depends(get_db)):
+async def delete_log(
+    log_id: int,
+    current_user: User = Depends(require_permission("log.delete")),
+    db: Session = Depends(get_db)
+):
     """
     删除记录及其关联的所有资源（包括图片文件）
     """
@@ -704,6 +712,7 @@ async def add_output_group(
     tools: Optional[str] = Form(None),
     models: Optional[str] = Form(None),
     output_files: List[UploadFile] = File(..., description="输出图片文件"),
+    current_user: User = Depends(require_permission("log.edit")),
     db: Session = Depends(get_db)
 ):
     """
@@ -812,6 +821,7 @@ async def update_output_group(
     models: Optional[str] = Form(None),
     remove_asset_ids: Optional[str] = Form(None, description="要删除的图片ID列表，JSON格式：[1, 2, 3]"),
     output_files: List[UploadFile] = File(default=[]),
+    current_user: User = Depends(require_permission("log.edit")),
     db: Session = Depends(get_db)
 ):
     """
@@ -943,6 +953,7 @@ async def update_output_group(
 async def delete_output_group(
     log_id: int,
     group_id: int,
+    current_user: User = Depends(require_permission("log.delete")),
     db: Session = Depends(get_db)
 ):
     """

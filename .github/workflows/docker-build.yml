@@ -147,7 +147,6 @@ jobs:
           output: 'trivy-results-${{ matrix.service }}.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
-          fail-on: 'CRITICAL'
         continue-on-error: true
 
       - name: Push image to Docker Hub

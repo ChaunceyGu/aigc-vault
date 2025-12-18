@@ -1,39 +1,58 @@
-import { Layout, Button } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { Layout, Button, Dropdown, Space, Avatar, message } from 'antd'
+import { PlusOutlined, UserOutlined, HeartOutlined, LogoutOutlined, LoginOutlined, SettingOutlined } from '@ant-design/icons'
+import type { MenuProps } from 'antd'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import PasswordModal from '../PasswordModal'
-import { isPasswordVerified, isPasswordRequired } from '../../utils/password'
+import { useAuth } from '../../contexts/AuthContext'
 
 const { Header } = Layout
 
 const AppHeader = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
-  const [passwordRequired, setPasswordRequired] = useState<boolean | null>(null)
+  const { user, logout } = useAuth()
 
-  // 检查是否需要密码
-  useEffect(() => {
-    isPasswordRequired().then((required: boolean) => {
-      setPasswordRequired(required)
-    })
-  }, [])
+  const handleCreateClick = () => {
+    navigate('/create')
+  }
 
-  const handleCreateClick = async () => {
-    // 如果不需要密码，直接跳转
-    if (passwordRequired === false) {
-      navigate('/create')
-      return
-    }
-    
-    // 如果需要密码，检查是否已验证
-    if (isPasswordVerified()) {
-      navigate('/create')
-    } else {
-      setShowPasswordModal(true)
+  const handleLogout = () => {
+    logout()
+    message.success('已登出')
+    if (location.pathname === '/favorites') {
+      navigate('/')
     }
   }
+
+  const userMenuItems: MenuProps['items'] = user ? [
+    {
+      key: 'favorites',
+      label: '我的收藏',
+      icon: <HeartOutlined />,
+      onClick: () => navigate('/favorites')
+    },
+    ...(user.roles.includes('admin') ? [{
+      key: 'admin',
+      label: '用户管理',
+      icon: <SettingOutlined />,
+      onClick: () => navigate('/admin')
+    }] : []),
+    {
+      type: 'divider'
+    },
+    {
+      key: 'logout',
+      label: '登出',
+      icon: <LogoutOutlined />,
+      onClick: handleLogout
+    }
+  ] : [
+    {
+      key: 'login',
+      label: '登录',
+      icon: <LoginOutlined />,
+      onClick: () => navigate('/login')
+    }
+  ]
 
   return (
     <Header 
@@ -57,38 +76,48 @@ const AppHeader = () => {
       >
         🎨 AI 绘图资产归档
       </div>
-      {location.pathname === '/' && (
+      <Space size="middle">
+      {location.pathname === '/' && user && (user.roles.includes('admin') || user.roles.includes('editor')) && (
         <Button
           type="primary"
           icon={<PlusOutlined />}
           size="large"
           onClick={handleCreateClick}
-          style={{
-            background: 'rgba(255, 255, 255, 0.2)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: '#fff',
-            fontWeight: 500,
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'
-          }}
-        >
-          新建记录
-        </Button>
-      )}
-      
-      <PasswordModal
-        open={showPasswordModal}
-        onSuccess={() => {
-          setShowPasswordModal(false)
-          navigate('/create')
-        }}
-        onCancel={() => setShowPasswordModal(false)}
-      />
+            style={{
+              background: 'rgba(255, 255, 255, 0.2)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              color: '#fff',
+              fontWeight: 500,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'
+            }}
+          >
+            新建记录
+          </Button>
+        )}
+        
+        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+          <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Avatar 
+              icon={<UserOutlined />} 
+              style={{ 
+                background: 'rgba(255, 255, 255, 0.2)',
+                border: '1px solid rgba(255, 255, 255, 0.3)'
+              }}
+            />
+            {user && (
+              <span style={{ color: '#fff', fontWeight: 500 }}>
+                {user.username}
+              </span>
+            )}
+          </div>
+        </Dropdown>
+      </Space>
     </Header>
   )
 }

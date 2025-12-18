@@ -66,6 +66,80 @@ app = FastAPI(
     version=get_version_info()['version']
 )
 
+# 应用启动时初始化默认管理员（如果不存在）
+@app.on_event("startup")
+async def init_default_admin():
+    """应用启动时检查并创建默认管理员"""
+    try:
+        from sqlalchemy.orm import Session
+        from app.database import SessionLocal
+        from app.models.user import User
+        from app.models.role import Role
+        from app.models.user_role import UserRole
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        db: Session = SessionLocal()
+        
+        try:
+            # 检查是否已存在管理员
+            admin_role = db.query(Role).filter(Role.name == 'admin').first()
+            if not admin_role:
+                logger.warning("admin 角色不存在，跳过默认管理员初始化")
+                return
+            
+            # 检查是否已有管理员用户
+            existing_admin = db.query(UserRole).join(Role).filter(Role.name == 'admin').first()
+            if existing_admin:
+                logger.debug("管理员账号已存在，跳过创建")
+                return
+            
+            # 从环境变量获取默认管理员信息
+            default_username = os.getenv('DEFAULT_ADMIN_USERNAME', 'admin')
+            default_password = os.getenv('DEFAULT_ADMIN_PASSWORD', 'admin123456')
+            default_email = os.getenv('DEFAULT_ADMIN_EMAIL', None)
+            
+            # 检查用户名是否已存在
+            existing_user = db.query(User).filter(User.username == default_username).first()
+            if existing_user:
+                # 如果用户存在但没有 admin 角色，则添加角色
+                has_admin_role = db.query(UserRole).filter(
+                    UserRole.user_id == existing_user.id,
+                    UserRole.role_id == admin_role.id
+                ).first()
+                if not has_admin_role:
+                    db.add(UserRole(user_id=existing_user.id, role_id=admin_role.id))
+                    db.commit()
+                    logger.info(f"已为用户 '{default_username}' 添加管理员角色")
+                return
+            
+            # 创建默认管理员账号
+            hashed_password = User.hash_password(default_password)
+            admin_user = User(
+                username=default_username,
+                email=default_email,
+                hashed_password=hashed_password,
+                is_active=True
+            )
+            db.add(admin_user)
+            db.flush()
+            
+            # 分配管理员角色
+            db.add(UserRole(user_id=admin_user.id, role_id=admin_role.id))
+            db.commit()
+            
+            logger.warning(f"⚠️  默认管理员账号已创建！用户名: {default_username}, 密码: {default_password}")
+            logger.warning(f"⚠️  请尽快修改默认密码！")
+        except Exception as e:
+            logger.error(f"初始化默认管理员失败: {e}", exc_info=True)
+            db.rollback()
+        finally:
+            db.close()
+    except Exception as e:
+        # 如果初始化失败，不影响应用启动
+        import logging
+        logging.getLogger(__name__).warning(f"默认管理员初始化跳过: {e}")
+
 # 配置 CORS
 app.add_middleware(
     CORSMiddleware,
@@ -188,11 +262,15 @@ async def health_check():
     })
 
 # 导入路由模块
-from app.api import logs, assets, tags, config
+from app.api import logs, assets, tags, config, auth, favorites, admin, rbac
 app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
 app.include_router(assets.router, prefix="/api/assets", tags=["assets"])
 app.include_router(tags.router, prefix="/api/tags", tags=["tags"])
 app.include_router(config.router, prefix="/api/config", tags=["config"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(favorites.router, prefix="/api/favorites", tags=["favorites"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(rbac.router, prefix="/api/rbac", tags=["rbac"])
 
 if __name__ == "__main__":
     import uvicorn

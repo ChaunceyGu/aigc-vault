@@ -21,31 +21,25 @@ import {
 import { ArrowLeftOutlined, CopyOutlined, CheckOutlined, EditOutlined, DeleteOutlined, LeftOutlined, RightOutlined, DownloadOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { getLogDetail, deleteLog, type LogDetail } from '../services/logs'
 import NSFWImage from '../components/NSFWImage'
-import PasswordModal from '../components/PasswordModal'
-import { isPasswordVerified, isPasswordRequired } from '../utils/password'
+import FavoriteButton from '../components/FavoriteButton'
+import { useAuth } from '../contexts/AuthContext'
 
 const { Title, Text } = Typography
 
 const LogDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [log, setLog] = useState<LogDetail | null>(null)
   const [previewVisible, setPreviewVisible] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
   const [previewIndex, setPreviewIndex] = useState(0)
   const [previewImages, setPreviewImages] = useState<string[]>([])
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
   const [showNsfw, setShowNsfw] = useState(false)  // 控制NSFW内容显示
-  const [passwordRequired, setPasswordRequired] = useState<boolean | null>(null)
-
-  // 检查是否需要密码
-  useEffect(() => {
-    isPasswordRequired().then(required => {
-      setPasswordRequired(required)
-    })
-  }, [])
+  
+  // 检查是否有编辑权限（需要 log.edit 或 log.delete 权限，或拥有 editor/admin 角色）
+  const canEdit = user && (user.roles.includes('admin') || user.roles.includes('editor'))
 
   useEffect(() => {
     if (id) {
@@ -345,6 +339,7 @@ const LogDetailPage: React.FC = () => {
           返回图库
         </Button>
         <Space size="middle">
+          {log && <FavoriteButton logId={log.id} size="large" style={{ borderRadius: 8 }} />}
           {log.is_nsfw && (
             <Button
               icon={showNsfw ? <EyeInvisibleOutlined /> : <EyeOutlined />}
@@ -360,46 +355,36 @@ const LogDetailPage: React.FC = () => {
               {showNsfw ? '隐藏NSFW内容' : '显示NSFW内容'}
             </Button>
           )}
-          <Button
-            icon={<EditOutlined />}
-            onClick={async () => {
-              // 如果不需要密码，直接跳转
-              if (passwordRequired === false) {
-                navigate(`/logs/${id}/edit`)
-                return
-              }
-              
-              // 如果需要密码，检查是否已验证
-              if (isPasswordVerified()) {
-                navigate(`/logs/${id}/edit`)
-              } else {
-                setPendingAction(() => () => navigate(`/logs/${id}/edit`))
-                setShowPasswordModal(true)
-              }
-            }}
-            size="large"
-            type="primary"
-            style={{ borderRadius: 8 }}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定要删除这条记录吗？"
-            description="此操作不可撤销，所有关联的图片文件也会被永久删除。"
-            onConfirm={handleDelete}
-            okText="确定删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-          >
-            <Button
-              icon={<DeleteOutlined />}
-              danger
-              size="large"
-              style={{ borderRadius: 8 }}
-            >
-              删除
-            </Button>
-          </Popconfirm>
+          {canEdit && (
+            <>
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => navigate(`/logs/${id}/edit`)}
+                size="large"
+                type="primary"
+                style={{ borderRadius: 8 }}
+              >
+                编辑
+              </Button>
+              <Popconfirm
+                title="确定要删除这条记录吗？"
+                description="此操作不可撤销，所有关联的图片文件也会被永久删除。"
+                onConfirm={handleDelete}
+                okText="确定删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+              >
+                <Button
+                  icon={<DeleteOutlined />}
+                  danger
+                  size="large"
+                  style={{ borderRadius: 8 }}
+                >
+                  删除
+                </Button>
+              </Popconfirm>
+            </>
+          )}
         </Space>
       </div>
 
@@ -1041,21 +1026,6 @@ const LogDetailPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      <PasswordModal
-        open={showPasswordModal}
-        onSuccess={() => {
-          setShowPasswordModal(false)
-          if (pendingAction) {
-            pendingAction()
-            setPendingAction(null)
-          }
-        }}
-        onCancel={() => {
-          setShowPasswordModal(false)
-          setPendingAction(null)
-        }}
-      />
     </div>
   )
 }

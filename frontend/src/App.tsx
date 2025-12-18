@@ -11,6 +11,10 @@ const HomePage = lazy(() => import('./pages/HomePage'))
 const CreateLogPage = lazy(() => import('./pages/CreateLogPage'))
 const LogDetailPage = lazy(() => import('./pages/LogDetailPage'))
 const EditLogPage = lazy(() => import('./pages/EditLogPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage'))
+const AdminPage = lazy(() => import('./pages/AdminPage'))
+const RoleManagePage = lazy(() => import('./pages/RoleManagePage'))
 
 const { Content, Footer } = Layout
 
@@ -36,6 +40,10 @@ function App() {
           }>
             <Routes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/favorites" element={<FavoritesPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/admin/roles" element={<RoleManagePage />} />
               <Route path="/create" element={<CreateLogPage />} />
               <Route path="/logs/:id" element={<LogDetailPage />} />
               <Route path="/logs/:id/edit" element={<EditLogPage />} />

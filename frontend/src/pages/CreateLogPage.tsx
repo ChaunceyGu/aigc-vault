@@ -17,7 +17,6 @@ import {
 import { PlusOutlined, MinusCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 import TagsInput from '../components/TagsInput'
-import PasswordModal from '../components/PasswordModal'
 import { createLog } from '../services/logs'
 import { getTools, getModels } from '../services/tags'
 import { getRecentTools, saveRecentTool, getRecentModels, saveRecentModel } from '../utils/storage'
@@ -30,7 +29,6 @@ const CreateLogPage: React.FC = () => {
   const [form] = Form.useForm()
   const [logType, setLogType] = useState<'txt2img' | 'img2img'>('txt2img')
   const [loading, setLoading] = useState(false)
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [isNsfw, setIsNsfw] = useState(false)
   
   // 标签相关
@@ -656,11 +654,6 @@ const CreateLogPage: React.FC = () => {
         </Form>
       </Card>
       
-      <PasswordModal
-        open={showPasswordModal}
-        onSuccess={() => setShowPasswordModal(false)}
-        onCancel={() => navigate('/')}
-      />
     </div>
   )
 }

@@ -20,11 +20,9 @@ import {
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 import TagsInput from '../components/TagsInput'
-import PasswordModal from '../components/PasswordModal'
 import { updateLog, getLogDetail, addOutputGroup, updateOutputGroup, deleteOutputGroup, type LogDetail } from '../services/logs'
 import { getTools, getModels } from '../services/tags'
 import { getRecentTools, saveRecentTool, getRecentModels, saveRecentModel } from '../utils/storage'
-import { isPasswordVerified } from '../utils/password'
 import { smartCompress } from '../utils/imageCompress'
 
 const { TextArea } = Input
@@ -37,7 +35,6 @@ const EditLogPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(true)
   const [logDetail, setLogDetail] = useState<LogDetail | null>(null)
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [isNsfw, setIsNsfw] = useState(false)
   
   // 标签相关
@@ -345,20 +342,6 @@ const EditLogPage: React.FC = () => {
     paramsNote?: string
   }) => {
     if (!id) return
-
-    // 再次检查密码验证（如果需要密码且未验证，则提示）
-    // 注意：如果未配置密码，isPasswordVerified可能返回false，但实际不需要密码
-    // 这里保持原逻辑，因为如果不需要密码，用户应该已经可以直接操作了
-    if (!isPasswordVerified()) {
-      // 检查是否需要密码，如果不需要则直接提交
-      const { isPasswordRequired } = await import('../utils/password')
-      const required = await isPasswordRequired()
-      if (required) {
-        setShowPasswordModal(true)
-        return
-      }
-      // 如果不需要密码，继续执行
-    }
 
     setLoading(true)
     try {
@@ -990,11 +973,6 @@ const EditLogPage: React.FC = () => {
         </Form>
       </Card>
       
-      <PasswordModal
-        open={showPasswordModal}
-        onSuccess={() => setShowPasswordModal(false)}
-        onCancel={() => navigate(`/logs/${id}`)}
-      />
     </div>
   )
 }

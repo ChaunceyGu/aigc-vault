@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # 编辑密码配置（可选）
     EDIT_PASSWORD: Optional[str] = os.getenv("EDIT_PASSWORD", None)
     
+    # JWT 配置
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 默认 24 小时
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

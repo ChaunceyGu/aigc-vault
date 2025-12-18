@@ -9,11 +9,13 @@
 - 🔍 **智能搜索**：支持标题模糊搜索、标签筛选、类型筛选，搜索防抖优化
 - 🖼️ **图片管理**：自动生成缩略图，支持多图片上传和管理，支持批量下载（ZIP）
 - 📊 **详情查看**：全屏预览、轮播切换、参数完整展示，支持键盘快捷键（ESC关闭、方向键切换）
-- ✏️ **编辑删除**：支持记录的编辑和删除操作，密码保护
+- ✏️ **编辑删除**：支持记录的编辑和删除操作，基于 RBAC 权限控制
 - 📦 **输出组管理**：支持为每条记录创建多个输出组，每个组可独立设置工具、模型和图片
 - 📥 **批量操作**：支持批量下载、批量删除
 - 🎨 **视图切换**：支持网格视图和瀑布流视图，瀑布流随机展示图片
-- 🔒 **密码保护**：创建/编辑记录需要密码验证
+- 👤 **用户账号系统**：支持用户注册、登录、JWT 认证，个人收藏功能
+- 🔐 **RBAC 权限管理**：完整的角色权限控制系统，支持动态角色和权限分配
+- 🛡️ **管理员后台**：用户管理、角色权限管理、统计信息查看
 - 🚫 **NSFW 内容管理**：支持标记敏感内容，自动打码保护，统一灯箱预览体验
 - 🌐 **外网访问支持**：通过API代理实现文件访问，无需暴露内部端口
 - ⚡ **性能优化**：图片懒加载、防抖搜索、智能缓存、组件优化、API响应缓存、数据库查询优化
@@ -134,6 +136,19 @@ source venv/bin/activate
 python scripts/init_db.py
 ```
 
+**首次部署时，系统会自动创建默认管理员账号：**
+- 默认用户名：`admin`（可通过 `DEFAULT_ADMIN_USERNAME` 环境变量修改）
+- 默认密码：`admin123456`（可通过 `DEFAULT_ADMIN_PASSWORD` 环境变量修改）
+- ⚠️ **首次登录后请立即修改密码！**
+
+你也可以手动运行初始化脚本创建管理员：
+
+```bash
+cd backend
+source venv/bin/activate
+python scripts/init_admin.py
+```
+
 #### 5. 启动服务
 
 **方式一：使用启动脚本（推荐）**
@@ -208,8 +223,34 @@ python scripts/verify_rustfs.py
 - `GET /api/tags/models` - 获取所有模型标签
 - `GET /api/tags/stats` - 获取标签统计信息（用于筛选器）
 
+**用户认证：**
+- `POST /api/auth/register` - 用户注册
+- `POST /api/auth/login` - 用户登录
+- `GET /api/auth/me` - 获取当前用户信息
+
+**收藏管理：**
+- `GET /api/favorites` - 获取用户收藏列表（支持分页）
+- `POST /api/favorites/{log_id}` - 添加收藏
+- `DELETE /api/favorites/{log_id}` - 取消收藏
+- `GET /api/favorites/{log_id}/check` - 检查是否已收藏
+
+**管理员后台：**
+- `GET /api/admin/users` - 获取用户列表（支持搜索、筛选、分页）
+- `GET /api/admin/users/{user_id}` - 获取用户详情
+- `PATCH /api/admin/users/{user_id}` - 更新用户信息（角色、状态）
+- `DELETE /api/admin/users/{user_id}` - 删除用户
+- `GET /api/admin/stats` - 获取管理员统计信息
+
+**RBAC 权限管理：**
+- `GET /api/rbac/permissions` - 获取权限列表
+- `GET /api/rbac/roles` - 获取角色列表
+- `POST /api/rbac/roles` - 创建角色
+- `PUT /api/rbac/roles/{role_id}` - 更新角色
+- `DELETE /api/rbac/roles/{role_id}` - 删除角色
+- `POST /api/rbac/roles/{role_id}/permissions/{permission_id}` - 为角色分配权限
+- `DELETE /api/rbac/roles/{role_id}/permissions/{permission_id}` - 移除角色权限
+
 **配置：**
-- `GET /api/config/edit-password` - 获取编辑密码配置
 - `GET /api/config/version` - 获取应用版本信息
 
 ## 🔧 配置说明
@@ -246,6 +287,12 @@ postgresql://用户名:密码@主机:端口/数据库名
 | `CORS_ORIGINS` | 允许的 CORS 源（逗号分隔） | `http://localhost:5173` |
 | `EDIT_PASSWORD` | 编辑密码（用于创建/编辑记录） | - |
 | `LOG_LEVEL` | 日志级别 | `INFO` |
+| `DEFAULT_ADMIN_USERNAME` | 默认管理员用户名（首次部署时自动创建） | `admin` |
+| `DEFAULT_ADMIN_PASSWORD` | 默认管理员密码（首次部署时自动创建） | `admin123456` |
+| `DEFAULT_ADMIN_EMAIL` | 默认管理员邮箱（可选） | - |
+| `JWT_SECRET_KEY` | JWT 密钥（用于 token 签名） | - |
+| `JWT_ALGORITHM` | JWT 算法 | `HS256` |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | Token 过期时间（分钟） | `1440` |
 
 ## 🐳 Docker 部署
 
@@ -294,6 +341,18 @@ EDIT_PASSWORD=your_edit_password_here
 
 # 日志配置
 LOG_LEVEL=INFO
+
+# 默认管理员账号配置（首次部署时自动创建）
+# 如果未设置，将使用默认值：用户名 admin，密码 admin123456
+# ⚠️ 首次登录后请立即修改密码！
+DEFAULT_ADMIN_USERNAME=admin
+DEFAULT_ADMIN_PASSWORD=admin123456
+DEFAULT_ADMIN_EMAIL=
+
+# JWT 认证配置
+JWT_SECRET_KEY=your-secret-key-change-this-in-production
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
 
 #### 2. 启动服务
@@ -333,6 +392,11 @@ docker-compose logs -f postgres
 - 访问前端：`http://localhost`（或你的服务器 IP）
 - 检查后端健康状态：`http://localhost/api/health`（通过 Nginx 代理）
 - 查看 API 文档：`http://localhost/docs`（通过 Nginx 代理）
+
+**首次部署时，系统会自动创建默认管理员账号：**
+- 默认用户名：`admin`（可通过 `DEFAULT_ADMIN_USERNAME` 环境变量修改）
+- 默认密码：`admin123456`（可通过 `DEFAULT_ADMIN_PASSWORD` 环境变量修改）
+- ⚠️ **首次登录后请立即修改密码！**
 
 **注意：**
 - 默认配置下，数据库端口（5432）和 API 端口（8000）不暴露到主机
@@ -437,16 +501,22 @@ docker run -d \
 - 每个输出组可独立设置工具、模型和图片
 - 兼容旧数据格式（自动迁移）
 
-**输出组功能**：
-- 支持为每条记录创建多个输出组
-- 每个输出组可独立设置工具、模型和图片
-- 兼容旧数据格式（自动迁移）
+**用户账号系统**：
+- 支持用户注册、登录、JWT 认证
+- 个人收藏功能
+- 基于 RBAC 的权限控制
+
+**RBAC 权限系统**：
+- 支持动态创建角色和权限
+- 细粒度权限控制
+- 管理员后台进行用户和角色管理
 
 ### 项目脚本
 
 后端 `scripts/` 目录包含以下工具脚本：
 
 - `init_db.py` - 初始化数据库
+- `init_admin.py` - 初始化默认管理员账号
 - `verify_db.py` - 验证数据库连接
 - `verify_rustfs.py` - 验证 RustFS 连接
 - `test_upload.py` - 测试文件上传功能
@@ -477,13 +547,28 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 🔒 安全说明
 
-### 密码保护
+### 用户认证与权限控制
 
-系统支持为创建/编辑记录设置密码保护：
+系统采用 JWT（JSON Web Token）进行用户认证，并使用 RBAC（基于角色的访问控制）进行权限管理：
 
-1. 在 `.env` 文件中设置 `EDIT_PASSWORD`
-2. 创建或编辑记录时需要输入密码
-3. 密码验证状态会缓存 24 小时（存储在 sessionStorage）
+1. **用户注册与登录**：
+   - 用户可以通过注册页面创建账号
+   - 登录后获得 JWT token，存储在 localStorage
+   - Token 默认有效期为 24 小时（可通过 `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` 配置）
+
+2. **RBAC 权限系统**：
+   - **角色**：系统预设三个角色（admin、editor、user），支持创建自定义角色
+   - **权限**：细粒度权限控制，如 `log.create`、`log.edit`、`user.manage` 等
+   - **权限分配**：通过角色分配权限，用户通过角色获得权限
+   - **默认权限**：
+     - `admin`：拥有所有权限
+     - `editor`：可以创建和编辑记录
+     - `user`：只能查看和收藏
+
+3. **默认管理员账号**：
+   - 首次部署时自动创建默认管理员账号
+   - 默认用户名：`admin`，默认密码：`admin123456`
+   - ⚠️ **首次登录后请立即修改密码！**
 
 ### NSFW 内容管理
 
@@ -589,7 +674,32 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 📅 更新日志
 
-### v1.2.0 (最新)
+### v1.3.0 (最新)
+
+**新功能：**
+- ✅ **用户账号系统**：支持用户注册、登录、JWT 认证
+- ✅ **个人收藏功能**：用户可以收藏喜欢的记录，支持收藏列表查看
+- ✅ **RBAC 权限管理系统**：完整的角色权限控制系统
+  - 支持动态创建角色和权限
+  - 细粒度权限控制（记录管理、用户管理、角色权限管理等）
+  - 权限列表显示中文名称，更易理解
+- ✅ **管理员后台**：
+  - 用户管理：查看、编辑、删除用户，分配角色
+  - 角色权限管理：创建、编辑、删除角色，分配权限
+  - 统计信息：用户数量、角色分布等
+- ✅ **默认管理员自动创建**：首次部署时自动创建默认管理员账号
+
+**优化改进：**
+- ✅ 移除密码保护功能，改用 RBAC 权限控制
+- ✅ 优化权限检查逻辑，基于角色和权限进行访问控制
+- ✅ 改进用户界面，添加用户菜单和导航
+
+**Bug修复：**
+- ✅ 修复用户管理界面空白问题
+- ✅ 修复角色显示问题，支持多角色显示
+- ✅ 修复权限列表显示，使用中文名称
+
+### v1.2.0
 
 **性能优化：**
 - ✅ 后端 API 响应缓存：标签统计、工具列表等使用内存缓存（5分钟）

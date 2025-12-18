@@ -1,23 +1,11 @@
 """
 配置 API
-提供应用配置信息（如编辑密码、版本信息等）
+提供应用配置信息（如版本信息等）
 """
 from fastapi import APIRouter
-from app.config import settings
 from app.main import get_version_info
 
 router = APIRouter()
-
-
-@router.get("/edit-password")
-async def get_edit_password():
-    """
-    获取编辑密码配置
-    如果未配置密码，返回空字符串（表示不需要密码）
-    """
-    return {
-        "password": settings.EDIT_PASSWORD or ""
-    }
 
 
 @router.get("/version")

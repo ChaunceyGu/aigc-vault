@@ -15,7 +15,20 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   (config) => {
-    // TODO: 添加认证 token 等
+    // 添加认证 token
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+      // 调试：检查 token 是否正确添加
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('API Request:', config.url, 'Token:', token.substring(0, 20) + '...')
+      }
+    } else {
+      // 调试：检查哪些请求没有 token
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('API Request without token:', config.url)
+      }
+    }
     return config
   },
   (error) => {
@@ -42,6 +55,20 @@ api.interceptors.response.use(
         message = data?.detail || data?.message || '请求参数错误，请检查输入'
       } else if (status === 401) {
         message = '未授权，请重新登录'
+        // 清除本地认证信息
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+        // 只有在非登录页面且不是初始化验证时才重定向
+        // 避免在 AuthContext 初始化时触发重定向
+        const isAuthCheck = error.config?.url?.includes('/auth/me')
+        if (!isAuthCheck && window.location.pathname !== '/login') {
+          // 延迟重定向，避免在组件初始化时立即跳转
+          setTimeout(() => {
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login'
+            }
+          }, 100)
+        }
       } else if (status === 403) {
         message = '没有权限访问此资源'
       } else if (status === 404) {
