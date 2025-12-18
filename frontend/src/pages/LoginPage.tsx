@@ -3,7 +3,7 @@
  */
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Form, Input, Button, message, Tabs, Space } from 'antd'
+import { Card, Form, Input, Button, message, Tabs } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -25,8 +25,9 @@ export default function LoginPage() {
       await login(values.username, values.password)
       message.success('登录成功')
       navigate('/')
-    } catch (error: any) {
-      message.error(error.message || '登录失败，请检查用户名和密码')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '登录失败，请检查用户名和密码'
+      message.error(errorMessage)
     } finally {
       setLoginLoading(false)
     }
@@ -38,8 +39,9 @@ export default function LoginPage() {
       await register(values.username, values.password, values.email)
       message.success('注册成功')
       navigate('/')
-    } catch (error: any) {
-      message.error(error.message || '注册失败，请重试')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '注册失败，请重试'
+      message.error(errorMessage)
     } finally {
       setRegisterLoading(false)
     }

@@ -42,7 +42,7 @@ export async function getUserList(
   search?: string,
   role?: string
 ): Promise<UserListResponse> {
-  const params: any = { page, page_size: pageSize }
+  const params: Record<string, string | number> = { page, page_size: pageSize }
   if (search) params.search = search
   if (role) params.role = role
   

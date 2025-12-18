@@ -21,7 +21,6 @@ import {
 } from 'antd'
 import {
   UserOutlined,
-  EditOutlined,
   DeleteOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -83,7 +82,7 @@ const AdminPage: React.FC = () => {
     try {
       const data = await getRoles()
       setAvailableRoles(data)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载角色列表失败:', error)
     }
   }
@@ -94,8 +93,9 @@ const AdminPage: React.FC = () => {
       const response = await getUserList(page, pageSize, search || undefined, roleFilter)
       setUsers(response.data)
       setTotal(response.total)
-    } catch (error: any) {
-      message.error(error.message || '加载用户列表失败')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '加载用户列表失败'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -105,7 +105,7 @@ const AdminPage: React.FC = () => {
     try {
       const data = await getAdminStats()
       setStats(data)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载统计信息失败:', error)
     }
   }
@@ -116,8 +116,9 @@ const AdminPage: React.FC = () => {
       message.success('更新成功')
       loadUsers()
       loadStats()
-    } catch (error: any) {
-      message.error(error.message || '更新失败')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '更新失败'
+      message.error(errorMessage)
     }
   }
 
@@ -127,8 +128,9 @@ const AdminPage: React.FC = () => {
       message.success('删除成功')
       loadUsers()
       loadStats()
-    } catch (error: any) {
-      message.error(error.message || '删除失败')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '删除失败'
+      message.error(errorMessage)
     }
   }
 
@@ -221,7 +223,7 @@ const AdminPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: UserListItem) => (
+      render: (_: unknown, record: UserListItem) => (
         <Space>
           <Select
             mode="multiple"

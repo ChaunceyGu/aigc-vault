@@ -39,13 +39,6 @@ const FavoritesPage: React.FC = () => {
     }
   }, [user, authLoading, navigate])
 
-  // 加载收藏列表（等待认证完成）
-  useEffect(() => {
-    if (!authLoading && user) {
-      loadFavorites()
-    }
-  }, [user, authLoading, page, pageSize])
-
   const loadFavorites = async () => {
     if (!user) return
     setLoading(true)
@@ -53,12 +46,21 @@ const FavoritesPage: React.FC = () => {
       const response = await getFavorites(page, pageSize)
       setFavorites(response.data)
       setTotal(response.total)
-    } catch (error: any) {
-      message.error(error.message || '加载收藏失败')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '加载收藏失败'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }
   }
+
+  // 加载收藏列表（等待认证完成）
+  useEffect(() => {
+    if (!authLoading && user) {
+      loadFavorites()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading, page, pageSize])
 
   // 如果正在加载认证状态，显示加载中
   if (authLoading) {

@@ -38,8 +38,6 @@ import {
   type RoleUpdateRequest,
 } from '../services/rbac'
 
-const { Search } = Input
-const { Option } = Select
 const { TextArea } = Input
 
 const RoleManagePage: React.FC = () => {
@@ -74,8 +72,9 @@ const RoleManagePage: React.FC = () => {
     try {
       const data = await getRoles()
       setRoles(data)
-    } catch (error: any) {
-      message.error(error.message || '加载角色列表失败')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '加载角色列表失败'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -95,8 +94,9 @@ const RoleManagePage: React.FC = () => {
         byCategory[perm.category].push(perm)
       })
       setPermissionsByCategory(byCategory)
-    } catch (error: any) {
-      message.error(error.message || '加载权限列表失败')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '加载权限列表失败'
+      message.error(errorMessage)
     }
   }
 
@@ -122,12 +122,18 @@ const RoleManagePage: React.FC = () => {
       await deleteRole(roleId)
       message.success('删除成功')
       loadRoles()
-    } catch (error: any) {
-      message.error(error.message || '删除失败')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '删除失败'
+      message.error(errorMessage)
     }
   }
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    name?: string
+    display_name: string
+    description?: string
+    permission_names?: string[]
+  }) => {
     try {
       if (editingRole) {
         const updateData: RoleUpdateRequest = {
@@ -150,8 +156,9 @@ const RoleManagePage: React.FC = () => {
       setModalVisible(false)
       form.resetFields()
       loadRoles()
-    } catch (error: any) {
-      message.error(error.message || '操作失败')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '操作失败'
+      message.error(errorMessage)
     }
   }
 
@@ -228,7 +235,7 @@ const RoleManagePage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: Role) => (
+      render: (_: unknown, record: Role) => (
         <Space>
           <Button
             type="link"

@@ -40,7 +40,7 @@ export interface RoleUpdateRequest {
  * 获取权限列表
  */
 export async function getPermissions(category?: string): Promise<Permission[]> {
-  const params: any = {}
+  const params: Record<string, string> = {}
   if (category) params.category = category
   return await api.get('/rbac/permissions', { params })
 }

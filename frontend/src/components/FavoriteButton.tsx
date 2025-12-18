@@ -57,8 +57,9 @@ export default function FavoriteButton({ logId, size = 'middle', style }: Favori
         setIsFavorited(true)
         message.success('已添加收藏')
       }
-    } catch (error: any) {
-      message.error(error.message || '操作失败，请重试')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '操作失败，请重试'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }
