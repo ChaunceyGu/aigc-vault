@@ -674,14 +674,6 @@ const HomePage: React.FC = () => {
                 >
                   <Card
                   hoverable={!isMobile}
-                  style={{
-                    borderRadius: isMobile ? 8 : 12,
-                    marginBottom: 0,
-                    cursor: 'pointer',
-                  }}
-                  bodyStyle={{
-                    padding: isMobile ? '12px' : '16px',
-                  }}
                   cover={
                     log.cover_url ? (
                       <div 
@@ -840,7 +832,8 @@ const HomePage: React.FC = () => {
                   }}
                   style={{ 
                     cursor: selectionMode ? 'pointer' : 'pointer',
-                    borderRadius: 12,
+                    borderRadius: isMobile ? 8 : 12,
+                    marginBottom: 0,
                     overflow: 'hidden',
                     border: selectedIds.includes(log.id) 
                       ? '2px solid #1890ff' 
@@ -858,7 +851,12 @@ const HomePage: React.FC = () => {
                     position: 'relative',
                     transition: 'all 0.2s',
                   }}
-                  bodyStyle={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}
+                  bodyStyle={{ 
+                    padding: isMobile ? '12px' : '12px 14px', 
+                    flex: 1, 
+                    display: 'flex', 
+                    flexDirection: 'column' 
+                  }}
                   className="log-card"
                   data-nsfw={log.is_nsfw ? 'true' : 'false'}
                 >
