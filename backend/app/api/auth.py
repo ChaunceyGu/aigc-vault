@@ -14,10 +14,16 @@ from app.models.user import User
 from app.models.role import Role
 from app.models.user_role import UserRole
 from app.utils.auth import create_access_token, get_current_user, security
+from app.utils.captcha import generate_captcha, verify_captcha
 from app.config import settings
-from sqlalchemy.orm import joinedload
 
 router = APIRouter()
+
+
+class CaptchaResponse(BaseModel):
+    """验证码响应"""
+    captcha_id: str
+    question: str
 
 
 class UserRegister(BaseModel):
@@ -25,6 +31,8 @@ class UserRegister(BaseModel):
     username: str
     password: str
     email: Optional[EmailStr] = None
+    captcha_id: str
+    captcha_answer: str
     
     @field_validator('username')
     @classmethod
@@ -47,6 +55,8 @@ class UserLogin(BaseModel):
     """用户登录请求"""
     username: str
     password: str
+    captcha_id: str
+    captcha_answer: str
 
 
 class TokenResponse(BaseModel):
@@ -69,9 +79,26 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+@router.get("/captcha", response_model=CaptchaResponse)
+async def get_captcha():
+    """获取验证码"""
+    captcha_id, question, _ = generate_captcha()
+    return CaptchaResponse(
+        captcha_id=captcha_id,
+        question=question
+    )
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     """用户注册"""
+    # 验证验证码
+    if not verify_captcha(user_data.captcha_id, user_data.captcha_answer):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="验证码错误或已过期，请刷新验证码后重试"
+        )
+    
     # 检查用户名是否已存在
     existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
@@ -130,6 +157,13 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     """用户登录"""
+    # 验证验证码
+    if not verify_captcha(user_data.captcha_id, user_data.captcha_answer):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="验证码错误或已过期，请刷新验证码后重试"
+        )
+    
     user = db.query(User).filter(User.username == user_data.username).first()
     if not user or not user.verify_password(user_data.password):
         raise HTTPException(

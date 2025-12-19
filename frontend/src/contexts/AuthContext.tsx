@@ -7,8 +7,8 @@ import { User, login as apiLogin, register as apiRegister, logout as apiLogout, 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: (username: string, password: string) => Promise<void>
-  register: (username: string, password: string, email?: string) => Promise<void>
+  login: (username: string, password: string, captcha_id?: string, captcha_answer?: string) => Promise<void>
+  register: (username: string, password: string, email?: string, captcha_id?: string, captcha_answer?: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
 }
@@ -65,13 +65,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth()
   }, [])
 
-  const login = async (username: string, password: string) => {
-    const response = await apiLogin({ username, password })
+  const login = async (
+    username: string, 
+    password: string,
+    captcha_id?: string,
+    captcha_answer?: string
+  ) => {
+    const response = await apiLogin({ 
+      username, 
+      password,
+      captcha_id: captcha_id || '',
+      captcha_answer: captcha_answer || ''
+    })
     setUser(response.user)
   }
 
-  const register = async (username: string, password: string, email?: string) => {
-    const response = await apiRegister({ username, password, email })
+  const register = async (
+    username: string, 
+    password: string, 
+    email?: string,
+    captcha_id?: string,
+    captcha_answer?: string
+  ) => {
+    const response = await apiRegister({ 
+      username, 
+      password, 
+      email,
+      captcha_id: captcha_id || '',
+      captcha_answer: captcha_answer || ''
+    })
     setUser(response.user)
   }
 

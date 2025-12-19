@@ -149,6 +149,24 @@ GET /api/tags/stats
 
 ### 用户认证
 
+#### 获取验证码
+```
+GET /api/auth/captcha
+```
+
+**响应**：
+```json
+{
+  "captcha_id": "验证码ID",
+  "question": "15 + 3 × 4 = ?"
+}
+```
+
+**说明**：
+- 验证码用于登录和注册，防止暴力破解
+- 验证码 5 分钟过期
+- 验证码支持多种难度：简单（两位数加减）、中等（乘法/三位数运算）、困难（混合运算/大数运算）
+
 #### 用户注册
 ```
 POST /api/auth/register
@@ -159,9 +177,15 @@ POST /api/auth/register
 {
   "username": "用户名",
   "password": "密码",
-  "email": "邮箱（可选）"
+  "email": "邮箱（可选）",
+  "captcha_id": "验证码ID",
+  "captcha_answer": "验证码答案"
 }
 ```
+
+**说明**：
+- 需要先调用 `GET /api/auth/captcha` 获取验证码
+- 验证码答案必须是数字（支持负数）
 
 #### 用户登录
 ```
@@ -172,9 +196,15 @@ POST /api/auth/login
 ```json
 {
   "username": "用户名",
-  "password": "密码"
+  "password": "密码",
+  "captcha_id": "验证码ID",
+  "captcha_answer": "验证码答案"
 }
 ```
+
+**说明**：
+- 需要先调用 `GET /api/auth/captcha` 获取验证码
+- 验证码答案必须是数字（支持负数）
 
 **响应**：
 ```json

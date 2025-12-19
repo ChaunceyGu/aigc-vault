@@ -15,12 +15,21 @@ export interface User {
 export interface LoginRequest {
   username: string
   password: string
+  captcha_id: string
+  captcha_answer: string
+}
+
+export interface CaptchaResponse {
+  captcha_id: string
+  question: string
 }
 
 export interface RegisterRequest {
   username: string
   password: string
   email?: string
+  captcha_id: string
+  captcha_answer: string
 }
 
 export interface TokenResponse {
@@ -85,6 +94,13 @@ export function clearAuth(): void {
  */
 export function isAuthenticated(): boolean {
   return getToken() !== null
+}
+
+/**
+ * 获取验证码
+ */
+export async function getCaptcha(): Promise<CaptchaResponse> {
+  return await api.get<CaptchaResponse>('/auth/captcha')
 }
 
 /**
