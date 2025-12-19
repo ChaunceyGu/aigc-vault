@@ -37,9 +37,19 @@ const LogDetailPage: React.FC = () => {
   const [previewIndex, setPreviewIndex] = useState(0)
   const [previewImages, setPreviewImages] = useState<string[]>([])
   const [showNsfw, setShowNsfw] = useState(false)  // 控制NSFW内容显示
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   
   // 检查是否有编辑权限（需要 log.edit 或 log.delete 权限，或拥有 editor/admin 角色）
   const canEdit = user && (user.roles.includes('admin') || user.roles.includes('editor'))
+
+  // 监听窗口大小变化
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     if (id) {
@@ -321,30 +331,36 @@ const LogDetailPage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: 1600, margin: '0 auto', padding: '24px' }}>
+    <div style={{ 
+      maxWidth: 1600, 
+      margin: '0 auto', 
+      padding: isMobile ? '12px' : '24px' 
+    }}>
       {/* 顶部操作栏 */}
       <div style={{ 
-        marginBottom: 24, 
+        marginBottom: isMobile ? 16 : 24, 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        padding: '16px 0',
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
+        gap: isMobile ? 8 : 0,
+        padding: isMobile ? '8px 0' : '16px 0',
       }}>
         <Button
           icon={<ArrowLeftOutlined />}
           onClick={() => navigate('/')}
-          size="large"
+          size={isMobile ? "middle" : "large"}
           style={{ borderRadius: 8 }}
         >
-          返回图库
+          {isMobile ? '返回' : '返回图库'}
         </Button>
-        <Space size="middle">
-          {log && <FavoriteButton logId={log.id} size="large" style={{ borderRadius: 8 }} />}
+        <Space size={isMobile ? "small" : "middle"} wrap={isMobile}>
+          {log && <FavoriteButton logId={log.id} size={isMobile ? "middle" : "large"} style={{ borderRadius: 8 }} />}
           {log.is_nsfw && (
             <Button
               icon={showNsfw ? <EyeInvisibleOutlined /> : <EyeOutlined />}
               onClick={() => setShowNsfw(!showNsfw)}
-              size="large"
+              size={isMobile ? "middle" : "large"}
               style={{ 
                 borderRadius: 8,
                 background: showNsfw ? 'rgba(255, 77, 79, 0.1)' : 'rgba(24, 144, 255, 0.1)',
@@ -352,7 +368,7 @@ const LogDetailPage: React.FC = () => {
                 color: showNsfw ? '#ff4d4f' : '#1890ff',
               }}
             >
-              {showNsfw ? '隐藏NSFW内容' : '显示NSFW内容'}
+              {isMobile ? (showNsfw ? '隐藏' : '显示') : (showNsfw ? '隐藏NSFW内容' : '显示NSFW内容')}
             </Button>
           )}
           {canEdit && (
@@ -360,11 +376,11 @@ const LogDetailPage: React.FC = () => {
               <Button
                 icon={<EditOutlined />}
                 onClick={() => navigate(`/logs/${id}/edit`)}
-                size="large"
+                size={isMobile ? "middle" : "large"}
                 type="primary"
                 style={{ borderRadius: 8 }}
               >
-                编辑
+                {isMobile ? '' : '编辑'}
               </Button>
               <Popconfirm
                 title="确定要删除这条记录吗？"
@@ -377,10 +393,10 @@ const LogDetailPage: React.FC = () => {
                 <Button
                   icon={<DeleteOutlined />}
                   danger
-                  size="large"
+                  size={isMobile ? "middle" : "large"}
                   style={{ borderRadius: 8 }}
                 >
-                  删除
+                  {isMobile ? '' : '删除'}
                 </Button>
               </Popconfirm>
             </>
@@ -388,27 +404,27 @@ const LogDetailPage: React.FC = () => {
         </Space>
       </div>
 
-      <Row gutter={32}>
+      <Row gutter={isMobile ? [16, 16] : [32, 32]}>
         {/* 左侧：元数据面板 */}
         <Col xs={24} lg={9}>
           <Card 
             title={
-              <div style={{ fontSize: 20, fontWeight: 600, color: '#262626' }}>📋 元数据</div>
+              <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 600, color: '#262626' }}>📋 元数据</div>
             }
             style={{ 
-              marginBottom: 24,
-              borderRadius: 12,
+              marginBottom: isMobile ? 16 : 24,
+              borderRadius: isMobile ? 8 : 12,
               boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
               border: '1px solid #e8e8e8',
             }}
-            bodyStyle={{ padding: '24px' }}
+            bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
           >
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
               <div>
                 <Title level={3} style={{ 
-                  marginBottom: 16, 
+                  marginBottom: isMobile ? 12 : 16, 
                   fontWeight: 700,
-                  fontSize: 24,
+                  fontSize: isMobile ? 18 : 24,
                   color: '#262626',
                   lineHeight: 1.4,
                 }}>
@@ -418,8 +434,8 @@ const LogDetailPage: React.FC = () => {
                   <Tag 
                     color={log.log_type === 'img2img' ? 'blue' : 'default'}
                     style={{ 
-                      fontSize: 13, 
-                      padding: '6px 16px',
+                      fontSize: isMobile ? 11 : 13, 
+                      padding: isMobile ? '4px 12px' : '6px 16px',
                       borderRadius: 6,
                       border: 'none',
                       fontWeight: 500,
@@ -441,7 +457,7 @@ const LogDetailPage: React.FC = () => {
                   alignItems: 'center', 
                   marginBottom: 12 
                 }}>
-                  <Text strong style={{ fontSize: 15, color: '#595959' }}>✨ 提示词</Text>
+                  <Text strong style={{ fontSize: isMobile ? 13 : 15, color: '#595959' }}>✨ 提示词</Text>
                   {log.prompt && log.prompt.trim() && (
                     <Tooltip title={copiedText === log.prompt ? '已复制' : '复制提示词'}>
                       <Button
@@ -461,14 +477,14 @@ const LogDetailPage: React.FC = () => {
                 </div>
                 <div
                   style={{
-                    padding: 16,
+                    padding: isMobile ? 12 : 16,
                     background: log.prompt && log.prompt.trim() ? '#fafafa' : '#f5f5f5',
                     borderRadius: 8,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    maxHeight: 300,
+                    maxHeight: isMobile ? 200 : 300,
                     overflowY: 'auto',
-                    fontSize: 14,
+                    fontSize: isMobile ? 13 : 14,
                     lineHeight: 1.8,
                     fontFamily: log.prompt && log.prompt.trim() ? 'monospace' : 'inherit',
                     border: '1px solid #e8e8e8',
@@ -487,7 +503,7 @@ const LogDetailPage: React.FC = () => {
                   alignItems: 'center', 
                   marginBottom: 12 
                 }}>
-                  <Text strong style={{ fontSize: 15, color: '#595959' }}>⚙️ 参数记录</Text>
+                  <Text strong style={{ fontSize: isMobile ? 13 : 15, color: '#595959' }}>⚙️ 参数记录</Text>
                   {log.params_note && log.params_note.trim() && (
                     <Tooltip title={copiedText === log.params_note ? '已复制' : '复制参数'}>
                       <Button
@@ -507,14 +523,14 @@ const LogDetailPage: React.FC = () => {
                 </div>
                 <div
                   style={{
-                    padding: 16,
+                    padding: isMobile ? 12 : 16,
                     background: log.params_note && log.params_note.trim() ? '#fafafa' : '#f5f5f5',
                     borderRadius: 8,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    maxHeight: 250,
+                    maxHeight: isMobile ? 180 : 250,
                     overflowY: 'auto',
-                    fontSize: 14,
+                    fontSize: isMobile ? 13 : 14,
                     lineHeight: 1.8,
                     border: '1px solid #e8e8e8',
                     color: log.params_note && log.params_note.trim() ? '#262626' : '#8c8c8c',
@@ -555,8 +571,8 @@ const LogDetailPage: React.FC = () => {
             {log.log_type === 'img2img' && (
               <Card 
                 title={
-                  <div style={{ fontSize: 18, fontWeight: 600, color: '#262626', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>📥 参考图片（输入图片）</span>
+                  <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 600, color: '#262626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>{isMobile ? '📥 输入图片' : '📥 参考图片（输入图片）'}</span>
                     {log.input_assets && log.input_assets.length > 0 && (
                       <Badge 
                         count={log.input_assets.length} 
@@ -571,14 +587,14 @@ const LogDetailPage: React.FC = () => {
                   </div>
                 }
                 style={{ 
-                  borderRadius: 12,
+                  borderRadius: isMobile ? 8 : 12,
                   boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
                   border: '1px solid #e8e8e8',
                 }}
-                bodyStyle={{ padding: '24px' }}
+                bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
               >
                 {log.input_assets && log.input_assets.length > 0 ? (
-                  <Row gutter={[16, 16]}>
+                  <Row gutter={isMobile ? [12, 12] : [16, 16]}>
                     {log.input_assets.map((asset, index) => (
                       <Col 
                         key={asset.id} 
@@ -690,9 +706,18 @@ const LogDetailPage: React.FC = () => {
             {/* 生成结果区 */}
             <Card 
               title={
-                <div style={{ fontSize: 18, fontWeight: 600, color: '#262626', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ 
+                  fontSize: isMobile ? 15 : 18, 
+                  fontWeight: 600, 
+                  color: '#262626', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  flexWrap: isMobile ? 'wrap' : 'nowrap',
+                  gap: isMobile ? 8 : 0,
+                }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>🎨 生成样张</span>
+                    <span>{isMobile ? '🎨 样张' : '🎨 生成样张'}</span>
                     <Badge 
                       count={log.output_groups?.reduce((sum, group) => sum + group.assets.length, 0) || 0} 
                       style={{ 
@@ -707,19 +732,19 @@ const LogDetailPage: React.FC = () => {
                     <Button
                       icon={<DownloadOutlined />}
                       onClick={handleDownloadAll}
-                      size="small"
+                      size={isMobile ? "small" : "small"}
                     >
-                      下载全部 ({log.output_groups.reduce((sum, group) => sum + group.assets.length, 0)})
+                      {isMobile ? `下载(${log.output_groups.reduce((sum, group) => sum + group.assets.length, 0)})` : `下载全部 (${log.output_groups.reduce((sum, group) => sum + group.assets.length, 0)})`}
                     </Button>
                   )}
                 </div>
               }
               style={{ 
-                borderRadius: 12,
+                borderRadius: isMobile ? 8 : 12,
                 boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
                 border: '1px solid #e8e8e8',
               }}
-              bodyStyle={{ padding: '24px' }}
+              bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
             >
               {log.output_groups && log.output_groups.length > 0 ? (
                 log.output_groups.map((group, groupIndex) => {
@@ -734,21 +759,26 @@ const LogDetailPage: React.FC = () => {
                     <div key={group.id || groupIndex} style={{ marginBottom: groupIndex < log.output_groups!.length - 1 ? 32 : 0 }}>
                       {/* 输出组标题 */}
                       {(group.tools.length > 0 || group.models.length > 0) && (
-                        <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                          <Space size="middle" wrap>
+                        <div style={{ 
+                          marginBottom: isMobile ? 12 : 16, 
+                          padding: isMobile ? '10px 12px' : '12px 16px', 
+                          background: '#f5f5f5', 
+                          borderRadius: 8 
+                        }}>
+                          <Space size={isMobile ? "small" : "middle"} wrap>
                             {group.tools.length > 0 && (
                               <Space size="small">
-                                <span style={{ color: '#666', fontSize: 13 }}>工具:</span>
+                                <span style={{ color: '#666', fontSize: isMobile ? 11 : 13 }}>工具:</span>
                                 {group.tools.map(tool => (
-                                  <Tag key={tool} style={{ margin: 0 }}>{tool}</Tag>
+                                  <Tag key={tool} style={{ margin: 0, fontSize: isMobile ? 11 : 12 }}>{tool}</Tag>
                                 ))}
                               </Space>
                             )}
                             {group.models.length > 0 && (
                               <Space size="small">
-                                <span style={{ color: '#666', fontSize: 13 }}>模型:</span>
+                                <span style={{ color: '#666', fontSize: isMobile ? 11 : 13 }}>模型:</span>
                                 {group.models.map(model => (
-                                  <Tag key={model} color="purple" style={{ margin: 0 }}>{model}</Tag>
+                                  <Tag key={model} color="purple" style={{ margin: 0, fontSize: isMobile ? 11 : 12 }}>{model}</Tag>
                                 ))}
                               </Space>
                             )}
@@ -756,7 +786,7 @@ const LogDetailPage: React.FC = () => {
                         </div>
                       )}
                       
-                      <Row gutter={[16, 16]}>
+                      <Row gutter={isMobile ? [12, 12] : [16, 16]}>
                         {group.assets.map((asset, assetIndex) => {
                           const currentGlobalIndex = globalIndex + assetIndex
                           return (

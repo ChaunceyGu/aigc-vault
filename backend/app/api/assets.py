@@ -84,8 +84,7 @@ async def stream_file(
             
             from app.utils.image_processor import generate_thumbnail
             try:
-                file_content = generate_thumbnail(file_content)
-                content_type = "image/jpeg"
+                file_content, content_type = generate_thumbnail(file_content)
             except Exception as e:
                 logger.warning(f"生成缩略图失败，使用原图: {e}")
                 # 如果生成缩略图失败，使用原图
@@ -104,8 +103,7 @@ async def stream_file(
             
             from app.utils.image_processor import compress_image
             try:
-                file_content = compress_image(file_content, max_width=1920, max_height=1920, quality=85)
-                content_type = "image/jpeg"
+                file_content, content_type = compress_image(file_content, max_width=1920, max_height=1920, quality=85)
             except Exception as e:
                 logger.warning(f"压缩图片失败，使用原图: {e}")
                 # 如果压缩失败，使用原图

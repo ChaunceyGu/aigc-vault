@@ -177,11 +177,11 @@ async def create_log(
                 
                 # 生成并上传缩略图
                 try:
-                    thumbnail_content = generate_thumbnail(content)
+                    thumbnail_content, thumbnail_content_type = generate_thumbnail(content)
                     thumbnail_key = await rustfs_client.upload_file(
                         thumbnail_content,
                         f"thumb_{file.filename}",
-                        "image/jpeg"
+                        thumbnail_content_type
                     )
                 except Exception as e:
                     logger.warning(f"生成缩略图失败: {e}，使用原图")
@@ -246,11 +246,11 @@ async def create_log(
                 
                 # 生成并上传缩略图
                 try:
-                    thumbnail_content = generate_thumbnail(content)
+                    thumbnail_content, thumbnail_content_type = generate_thumbnail(content)
                     thumbnail_key = await rustfs_client.upload_file(
                         thumbnail_content,
                         f"thumb_{file.filename}",
-                        "image/jpeg"
+                        thumbnail_content_type
                     )
                 except Exception as e:
                     logger.warning(f"生成缩略图失败: {e}，使用原图")
@@ -315,6 +315,14 @@ async def list_logs(
     - **model**: 筛选模型标签
     """
     try:
+        # 构建缓存键
+        cache_key = f"logs_list_{page}_{page_size}_{search or ''}_{log_type or ''}_{tool or ''}_{model or ''}"
+        
+        # 尝试从缓存获取（缓存1分钟）
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            logger.debug(f"缓存命中: {cache_key}")
+            return cached_result
         query = db.query(GenLog)
         
         # 标题搜索
@@ -446,12 +454,17 @@ async def list_logs(
                 "is_nsfw": log.is_nsfw == 'true' if log.is_nsfw else False  # 转换为布尔值
             })
         
-        return {
+        result_data = {
             "total": total,
             "page": page,
             "page_size": page_size,
             "items": result
         }
+        
+        # 缓存结果（1分钟）
+        cache.set(cache_key, result_data, 60)
+        
+        return result_data
         
     except Exception as e:
         logger.error(f"获取记录列表失败: {e}", exc_info=True)
@@ -769,11 +782,11 @@ async def add_output_group(
             
             # 生成并上传缩略图
             try:
-                thumbnail_content = generate_thumbnail(content)
+                thumbnail_content, thumbnail_content_type = generate_thumbnail(content)
                 thumbnail_key = await rustfs_client.upload_file(
                     thumbnail_content,
                     f"thumb_{file.filename}",
-                    "image/jpeg"
+                    thumbnail_content_type
                 )
             except Exception as e:
                 logger.warning(f"生成缩略图失败: {e}，使用原图")

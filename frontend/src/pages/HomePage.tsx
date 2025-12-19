@@ -1,7 +1,7 @@
 /**
  * 图库列表页面（首页）
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Input,
@@ -254,39 +254,41 @@ const HomePage: React.FC = () => {
     return () => clearTimeout(timer)
   }, [searchInput, search])  // 当searchInput或search变化时触发防抖
   
-  const handleSearch = (value: string) => {
+  const handleSearch = useCallback((value: string) => {
     setSearchInput(value)
     if (!value) {
       // 如果清空搜索，立即执行
       setSearch('')
       setPage(1)
     }
-  }
+  }, [])
 
   const handleCardClick = useCallback((logId: number) => {
     navigate(`/logs/${logId}`)
   }, [navigate])
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     loadLogs(true) // 强制刷新
     loadTagStats(true) // 强制刷新标签统计
     setSelectedIds([])
-  }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 切换选择模式
-  const toggleSelectionMode = () => {
-    setSelectionMode(!selectionMode)
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => !prev)
     setSelectedIds([])
-  }
+  }, [])
 
-  // 切换单个选择
-  const toggleSelect = (id: number) => {
-    if (selectedIds.includes(id)) {
-      setSelectedIds(selectedIds.filter(i => i !== id))
-    } else {
-      setSelectedIds([...selectedIds, id])
-    }
-  }
+  // 切换单个选择（使用函数式更新优化）
+  const toggleSelect = useCallback((id: number) => {
+    setSelectedIds(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(i => i !== id)
+      } else {
+        return [...prev, id]
+      }
+    })
+  }, [])
 
   // 全选/取消全选（使用useCallback优化）
   const toggleSelectAll = useCallback(() => {
@@ -298,6 +300,26 @@ const HomePage: React.FC = () => {
       }
     })
   }, [logs])
+
+  // 使用 useMemo 缓存工具和模型选项列表，避免重复计算
+  const toolOptions = useMemo(() => {
+    return Object.keys(tagStats.tools).map(tool => ({
+      label: `${tool}${!isMobile ? `（${tagStats.tools[tool]} 条记录）` : ''}`,
+      value: tool,
+    }))
+  }, [tagStats.tools, isMobile])
+
+  const modelOptions = useMemo(() => {
+    return Object.keys(tagStats.models).map(model => ({
+      label: `${model}${!isMobile ? `（${tagStats.models[model]} 条记录）` : ''}`,
+      value: model,
+    }))
+  }, [tagStats.models, isMobile])
+
+  // 缓存选中的记录，避免重复过滤
+  const selectedLogs = useMemo(() => {
+    return logs.filter(log => selectedIds.includes(log.id))
+  }, [logs, selectedIds])
 
 
   // 批量下载选中记录的图片（压缩为 ZIP）
@@ -311,7 +333,7 @@ const HomePage: React.FC = () => {
       // 动态导入 JSZip（如果未安装会提示）
       const JSZip = (await import('jszip')).default
       
-      const selectedLogs = logs.filter(log => selectedIds.includes(log.id))
+      // 使用缓存的 selectedLogs
       const zip = new JSZip()
       let downloadCount = 0
       const loadingMessage = message.loading('正在准备下载文件...', 0)
@@ -402,15 +424,16 @@ const HomePage: React.FC = () => {
       {/* 搜索和筛选栏 */}
       <Card 
         style={{ 
-          marginBottom: isMobile ? 16 : 24,
-          borderRadius: isMobile ? 6 : 8,
+          marginBottom: isMobile ? 12 : 24,
+          borderRadius: isMobile ? 8 : 8,
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
         }}
         bodyStyle={{ padding: isMobile ? '12px' : '16px' }}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Row gutter={isMobile ? [8, 8] : [16, 16]}>
-            <Col xs={24} sm={12} md={10}>
+        <Space direction="vertical" style={{ width: '100%' }} size={isMobile ? "small" : "middle"}>
+          {/* 移动端：搜索框单独一行 */}
+          <Row gutter={isMobile ? [0, 8] : [16, 16]}>
+            <Col xs={24} sm={24} md={10}>
               <Space.Compact style={{ width: '100%' }}>
                 <Input
                   placeholder={isMobile ? "搜索标题或提示词" : "搜索记录标题或提示词（按 / 键快速聚焦）"}
@@ -434,7 +457,10 @@ const HomePage: React.FC = () => {
                 </Button>
               </Space.Compact>
             </Col>
-            <Col xs={12} sm={6} md={4}>
+          </Row>
+          {/* 筛选条件：移动端两行，桌面端一行 */}
+          <Row gutter={isMobile ? [8, 8] : [16, 16]}>
+            <Col xs={12} sm={8} md={4}>
               <Select
                 style={{ width: '100%' }}
                 placeholder={isMobile ? "类型" : "生成类型"}
@@ -460,9 +486,9 @@ const HomePage: React.FC = () => {
                   String(option?.label || option?.value || '').toLowerCase().includes(input.toLowerCase())
                 }
               >
-                {Object.keys(tagStats.tools).map(tool => (
-                  <Select.Option key={tool} value={tool}>
-                    {tool}{!isMobile && `（${tagStats.tools[tool]} 条记录）`}
+                {toolOptions.map(option => (
+                  <Select.Option key={option.value} value={option.value}>
+                    {option.label}
                   </Select.Option>
                 ))}
               </Select>
@@ -480,9 +506,9 @@ const HomePage: React.FC = () => {
                   String(option?.label || option?.value || '').toLowerCase().includes(input.toLowerCase())
                 }
               >
-                {Object.keys(tagStats.models).map(model => (
-                  <Select.Option key={model} value={model}>
-                    {model}{!isMobile && `（${tagStats.models[model]} 条记录）`}
+                {modelOptions.map(option => (
+                  <Select.Option key={option.value} value={option.value}>
+                    {option.label}
                   </Select.Option>
                 ))}
               </Select>
@@ -630,7 +656,7 @@ const HomePage: React.FC = () => {
       ) : (
         viewMode === 'grid' ? (
           <>
-            <Row gutter={[20, 20]}>
+            <Row gutter={isMobile ? [12, 12] : [20, 20]}>
             {logs.map((log, index) => {
               const isSelected = selectedIds.includes(log.id)
               return (
@@ -647,7 +673,15 @@ const HomePage: React.FC = () => {
                   }}
                 >
                   <Card
-                  hoverable
+                  hoverable={!isMobile}
+                  style={{
+                    borderRadius: isMobile ? 8 : 12,
+                    marginBottom: 0,
+                    cursor: 'pointer',
+                  }}
+                  bodyStyle={{
+                    padding: isMobile ? '12px' : '16px',
+                  }}
                   cover={
                     log.cover_url ? (
                       <div 
@@ -693,16 +727,16 @@ const HomePage: React.FC = () => {
                                 right: 8,
                                 background: 'rgba(0, 0, 0, 0.75)',
                                 color: '#fff',
-                                padding: '4px 10px',
+                                padding: isMobile ? '3px 8px' : '4px 10px',
                                 borderRadius: 6,
-                                fontSize: 12,
+                                fontSize: isMobile ? 10 : 12,
                                 fontWeight: 500,
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 4,
                                 zIndex: 10,
                               }}>
-                                <PictureOutlined /> +{log.output_count - 4}
+                                <PictureOutlined style={{ fontSize: isMobile ? 10 : 12 }} /> +{log.output_count - 4}
                               </div>
                             )}
                           </div>
@@ -854,8 +888,8 @@ const HomePage: React.FC = () => {
                       >
                         <div
                           style={{
-                            width: 28,
-                            height: 28,
+                            width: isMobile ? 32 : 28,
+                            height: isMobile ? 32 : 28,
                             borderRadius: 6,
                             background: selectedIds.includes(log.id) ? '#1890ff' : 'rgba(255, 255, 255, 0.95)',
                             border: selectedIds.includes(log.id) ? '2px solid #1890ff' : '2px solid rgba(0, 0, 0, 0.15)',
@@ -876,7 +910,7 @@ const HomePage: React.FC = () => {
                           } : undefined}
                         >
                           {isSelected && (
-                            <span style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✓</span>
+                            <span style={{ color: '#fff', fontSize: isMobile ? 18 : 16, fontWeight: 'bold' }}>✓</span>
                           )}
                         </div>
                       </div>
@@ -896,7 +930,7 @@ const HomePage: React.FC = () => {
                             overflow: 'hidden', 
                             textOverflow: 'ellipsis', 
                             whiteSpace: 'nowrap',
-                            fontSize: 15,
+                            fontSize: isMobile ? 14 : 15,
                             fontWeight: 600,
                             color: '#262626',
                             lineHeight: 1.4,
@@ -910,8 +944,8 @@ const HomePage: React.FC = () => {
                           color={log.log_type === 'img2img' ? 'blue' : 'cyan'} 
                           style={{ 
                             margin: 0, 
-                            fontSize: 11,
-                            padding: '2px 8px',
+                            fontSize: isMobile ? 10 : 11,
+                            padding: isMobile ? '1px 6px' : '2px 8px',
                             borderRadius: 4,
                             border: 'none',
                             flexShrink: 0,

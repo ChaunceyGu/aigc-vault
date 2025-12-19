@@ -3,6 +3,7 @@ import { PlusOutlined, UserOutlined, HeartOutlined, LogoutOutlined, LoginOutline
 import type { MenuProps } from 'antd'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { useState, useEffect } from 'react'
 
 const { Header } = Layout
 
@@ -10,6 +11,15 @@ const AppHeader = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const handleCreateClick = () => {
     navigate('/create')
@@ -60,28 +70,34 @@ const AppHeader = () => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'space-between',
-        padding: '0 24px',
+        padding: isMobile ? '0 12px' : '0 24px',
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+        height: isMobile ? '56px' : '64px',
+        lineHeight: isMobile ? '56px' : '64px',
       }}
     >
       <div 
         style={{ 
           color: '#fff', 
-          fontSize: '20px', 
+          fontSize: isMobile ? '16px' : '20px', 
           fontWeight: 600, 
           cursor: 'pointer',
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
         onClick={() => navigate('/')}
       >
-        🎨 AI 绘图资产归档
+        {isMobile ? '🎨 AI 资产归档' : '🎨 AI 绘图资产归档'}
       </div>
-      <Space size="middle">
+      <Space size={isMobile ? "small" : "middle"}>
       {location.pathname === '/' && user && (user.roles.includes('admin') || user.roles.includes('editor')) && (
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          size="large"
+          size={isMobile ? "middle" : "large"}
           onClick={handleCreateClick}
             style={{
               background: 'rgba(255, 255, 255, 0.2)',
@@ -89,6 +105,7 @@ const AppHeader = () => {
               color: '#fff',
               fontWeight: 500,
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+              minWidth: isMobile ? 'auto' : '100px',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'
@@ -97,20 +114,28 @@ const AppHeader = () => {
               e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'
             }}
           >
-            新建记录
+            {isMobile ? '' : '新建记录'}
           </Button>
         )}
         
         <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-          <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ 
+            cursor: 'pointer', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: isMobile ? 4 : 8,
+            minWidth: isMobile ? 32 : 'auto',
+            justifyContent: 'center',
+          }}>
             <Avatar 
               icon={<UserOutlined />} 
+              size={isMobile ? "default" : "large"}
               style={{ 
                 background: 'rgba(255, 255, 255, 0.2)',
                 border: '1px solid rgba(255, 255, 255, 0.3)'
               }}
             />
-            {user && (
+            {user && !isMobile && (
               <span style={{ color: '#fff', fontWeight: 500 }}>
                 {user.username}
               </span>

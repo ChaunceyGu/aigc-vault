@@ -14,8 +14,9 @@ def compress_image(
     image_content: bytes,
     max_width: int = 1920,
     max_height: int = 1920,
-    quality: int = 85
-) -> bytes:
+    quality: int = 85,
+    output_format: str = None
+) -> Tuple[bytes, str]:
     """
     压缩图片（用于列表显示的中等尺寸）
     
@@ -23,11 +24,13 @@ def compress_image(
         image_content: 原始图片内容（字节）
         max_width: 最大宽度
         max_height: 最大高度
-        quality: JPG 质量（1-100）
+        quality: 图片质量（1-100）
+        output_format: 输出格式（'webp' 或 'jpeg'），默认使用配置值
         
     Returns:
-        压缩后的图片内容（JPG 格式，字节）
+        (压缩后的图片内容（字节）, Content-Type)
     """
+    output_format = output_format or settings.IMAGE_OUTPUT_FORMAT
     try:
         image = Image.open(io.BytesIO(image_content))
         
@@ -62,15 +65,22 @@ def compress_image(
             new_height = int(height * ratio)
             image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
         
-        # 保存为 JPG
+        # 保存为指定格式（WebP 或 JPEG）
         output = io.BytesIO()
-        image.save(output, format='JPEG', quality=quality, optimize=True)
+        if output_format == 'webp':
+            # WebP 格式：减少 25-35% 文件大小
+            image.save(output, format='WEBP', quality=quality, method=6)  # method=6 是最高压缩质量
+            content_type = 'image/webp'
+        else:
+            # JPEG 格式（兼容旧版本）
+            image.save(output, format='JPEG', quality=quality, optimize=True)
+            content_type = 'image/jpeg'
         output.seek(0)
         
         compressed_bytes = output.read()
-        logger.info(f"图片压缩成功: {width}x{height} -> {image.size[0]}x{image.size[1]}, 大小: {len(compressed_bytes)} bytes")
+        logger.info(f"图片压缩成功: {width}x{height} -> {image.size[0]}x{image.size[1]}, 格式: {output_format}, 大小: {len(compressed_bytes)} bytes")
         
-        return compressed_bytes
+        return compressed_bytes, content_type
         
     except Exception as e:
         logger.error(f"图片压缩失败: {e}")
@@ -80,22 +90,25 @@ def compress_image(
 def generate_thumbnail(
     image_content: bytes,
     size: int = None,
-    quality: int = None
-) -> bytes:
+    quality: int = None,
+    output_format: str = None
+) -> Tuple[bytes, str]:
     """
     生成图片缩略图
     
     Args:
         image_content: 原始图片内容（字节）
         size: 缩略图大小（宽度，保持比例），默认使用配置值
-        quality: JPG 质量（1-100），默认使用配置值
+        quality: 图片质量（1-100），默认使用配置值
+        output_format: 输出格式（'webp' 或 'jpeg'），默认使用配置值
         
     Returns:
-        缩略图内容（JPG 格式，字节）
+        (缩略图内容（字节）, Content-Type)
         
     Raises:
         ValueError: 如果图片格式不支持或损坏
     """
+    output_format = output_format or settings.IMAGE_OUTPUT_FORMAT
     size = size or settings.THUMBNAIL_SIZE
     quality = quality or settings.THUMBNAIL_QUALITY
     
@@ -144,15 +157,22 @@ def generate_thumbnail(
         # 生成缩略图（使用高质量缩放）
         thumbnail = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
         
-        # 保存为 JPG
+        # 保存为指定格式（WebP 或 JPEG）
         output = io.BytesIO()
-        thumbnail.save(output, format='JPEG', quality=quality, optimize=True)
+        if output_format == 'webp':
+            # WebP 格式：减少 25-35% 文件大小
+            thumbnail.save(output, format='WEBP', quality=quality, method=6)  # method=6 是最高压缩质量
+            content_type = 'image/webp'
+        else:
+            # JPEG 格式（兼容旧版本）
+            thumbnail.save(output, format='JPEG', quality=quality, optimize=True)
+            content_type = 'image/jpeg'
         output.seek(0)
         
         thumbnail_bytes = output.read()
-        logger.info(f"缩略图生成成功: {width}x{height} -> {new_width}x{new_height}, 大小: {len(thumbnail_bytes)} bytes, 格式: {image.format}")
+        logger.info(f"缩略图生成成功: {width}x{height} -> {new_width}x{new_height}, 格式: {output_format}, 大小: {len(thumbnail_bytes)} bytes, 原始格式: {image.format}")
         
-        return thumbnail_bytes
+        return thumbnail_bytes, content_type
         
     except Exception as e:
         logger.error(f"生成缩略图失败: {e}")

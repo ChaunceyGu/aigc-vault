@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     THUMBNAIL_SIZE: int = int(os.getenv("THUMBNAIL_SIZE", "300"))
     THUMBNAIL_QUALITY: int = int(os.getenv("THUMBNAIL_QUALITY", "85"))
     
+    # 图片输出格式配置（'webp' 或 'jpeg'）
+    # WebP 格式可以减少 25-35% 的文件大小，同时保持相似质量
+    IMAGE_OUTPUT_FORMAT: str = os.getenv("IMAGE_OUTPUT_FORMAT", "webp").lower()  # 默认使用 WebP
+    
     # 编辑密码配置（可选）
     EDIT_PASSWORD: Optional[str] = os.getenv("EDIT_PASSWORD", None)
     

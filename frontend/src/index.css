@@ -169,11 +169,52 @@ html {
   opacity: 1 !important;
 }
 
-/* 响应式优化 */
+/* 响应式优化 - 移动端 */
 @media (max-width: 768px) {
   .log-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  /* 移动端触摸优化 */
+  .ant-btn {
+    min-height: 36px;  /* 增大触摸区域 */
+    padding: 4px 12px;
+  }
+  
+  .ant-select-selector {
+    min-height: 36px !important;  /* 增大触摸区域 */
+  }
+  
+  .ant-input {
+    min-height: 36px;  /* 增大触摸区域 */
+  }
+  
+  /* 移动端卡片优化 */
+  .ant-card {
+    border-radius: 8px;
+  }
+  
+  .ant-card-body {
+    padding: 12px !important;
+  }
+  
+  /* 移动端分页器优化 */
+  .ant-pagination {
+    font-size: 14px;
+  }
+  
+  .ant-pagination-item {
+    min-width: 32px;
+    height: 32px;
+    line-height: 30px;
+  }
+  
+  /* 移动端标签优化 */
+  .ant-tag {
+    font-size: 12px;
+    padding: 2px 8px;
+    margin: 2px;
   }
 }
 
